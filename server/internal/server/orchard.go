@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log"
 	db "server/internal/db/sqlc"
 )
@@ -11,7 +12,7 @@ func (s Server) GetOrchards(ctx context.Context, request GetOrchardsRequestObjec
 	userIdVal := ctx.Value("userID")
 
 	if userIdVal == nil {
-		log.Printf("this is the weird bullshit happening")
+		log.Printf("Unauthorized: No user ID in context")
 		return GetOrchards401JSONResponse{}, nil
 	}
 
@@ -20,6 +21,7 @@ func (s Server) GetOrchards(ctx context.Context, request GetOrchardsRequestObjec
 	data, err := s.queries.ListOrchards(ctx, userId)
 
 	if err != nil {
+		log.Printf("Error listing orchards for user %s: %v", userId, err)
 		return nil, err
 	}
 
@@ -29,6 +31,7 @@ func (s Server) GetOrchards(ctx context.Context, request GetOrchardsRequestObjec
 
 		stations, err := s.queries.ListStationsByOrchard(ctx, orchard.ID)
 		if err != nil {
+			log.Printf("Error listing stations for orchard %s: %v", orchard.ID, err)
 			return nil, err
 		}
 
@@ -50,6 +53,7 @@ func (s Server) GetOrchard(ctx context.Context, request GetOrchardRequestObject)
 	orchard, err := s.queries.GetOrchardById(ctx, request.OrchardId)
 
 	if err != nil {
+		log.Printf("Error getting orchard %s: %v", request.OrchardId, err)
 		return nil, err
 	}
 	return GetOrchard200JSONResponse(OrchardToDomain(orchard)), nil
@@ -60,11 +64,17 @@ func (s Server) CreateOrchard(ctx context.Context, request CreateOrchardRequestO
 	userIdVal := ctx.Value("userID")
 
 	if userIdVal == nil {
-		log.Printf("this is the weird bullshit happening")
+		log.Printf("Unauthorized: No user ID in context")
 		return CreateOrchard401JSONResponse{}, nil
 	}
 
 	userId := userIdVal.(string)
+
+	// Validate input
+	if len(request.Body.Name) < 2 || len(request.Body.Name) > 32 {
+		log.Printf("Invalid orchard name length: %d characters", len(request.Body.Name))
+		return nil, fmt.Errorf("orchard name must be between 2 and 32 characters")
+	}
 
 	orchard, err := s.queries.CreateOrchard(ctx, db.CreateOrchardParams{
 		Name:    request.Body.Name,
@@ -72,6 +82,7 @@ func (s Server) CreateOrchard(ctx context.Context, request CreateOrchardRequestO
 	})
 
 	if err != nil {
+		log.Printf("Error creating orchard for user %s: %v", userId, err)
 		return nil, err
 	}
 
@@ -80,12 +91,19 @@ func (s Server) CreateOrchard(ctx context.Context, request CreateOrchardRequestO
 
 func (s Server) UpdateOrchard(ctx context.Context, request UpdateOrchardRequestObject) (UpdateOrchardResponseObject, error) {
 
+	// Validate input
+	if request.Body.Name != nil && (len(*request.Body.Name) < 2 || len(*request.Body.Name) > 32) {
+		log.Printf("Invalid orchard name length: %d characters", len(*request.Body.Name))
+		return nil, fmt.Errorf("orchard name must be between 2 and 32 characters")
+	}
+
 	orchard, err := s.queries.UpdateOrchard(ctx, db.UpdateOrchardParams{
 		ID:   request.OrchardId,
 		Name: request.Body.Name,
 	})
 
 	if err != nil {
+		log.Printf("Error updating orchard %s: %v", request.OrchardId, err)
 		return nil, err
 	}
 
@@ -97,6 +115,7 @@ func (s Server) DeleteOrchard(ctx context.Context, request DeleteOrchardRequestO
 	err := s.queries.DeleteOrchard(ctx, request.OrchardId)
 
 	if err != nil {
+		log.Printf("Error deleting orchard %s: %v", request.OrchardId, err)
 		return nil, err
 	}
 

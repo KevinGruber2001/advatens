@@ -3,12 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/clerk/clerk-sdk-go/v2"
-	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"net/http"
 	"os/signal"
@@ -17,6 +11,13 @@ import (
 	"server/internal/server"
 	"syscall"
 	"time"
+
+	"github.com/clerk/clerk-sdk-go/v2"
+	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func gracefulShutdown(apiServer *http.Server, done chan bool) {
@@ -95,7 +96,11 @@ func main() {
 
 	serverImpl := server.NewServer(pool, queryApi)
 
-	clerk.SetKey("sk_test_EZgqNlgxvPvbaQxEJuNumBOc2jqUAJQaR3yc9dUqxb")
+	if env.CLERK_SECRET_KEY == "" {
+		log.Fatal("CLERK_SECRET_KEY environment variable is required")
+	}
+
+	clerk.SetKey(env.CLERK_SECRET_KEY)
 
 	strictHandler := server.NewStrictHandler(serverImpl, []server.StrictMiddlewareFunc{})
 

@@ -3,57 +3,57 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 )
 
 func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject) (GetMetricsResponseObject, error) {
-
 	stationId := request.Params.StationId
-	st, err := s.queries.GetStationById(ctx, stationId)
+	metricType := request.Params.MetricType
 
+	// Validate station exists
+	st, err := s.queries.GetStationById(ctx, stationId)
 	if err != nil {
 		return nil, err
 	}
 
-	print("test1")
+	// Determine time range
+	startTime := "-30d"
+	if request.Params.StartTime != nil {
+		startTime = *request.Params.StartTime
+	}
 
+	endTime := "now()"
+	if request.Params.EndTime != nil {
+		endTime = *request.Params.EndTime
+	}
+
+	// Map metric type to InfluxDB measurement
+	measurement := getInfluxMeasurement(metricType)
+
+	// Build InfluxDB query
 	query := fmt.Sprintf(`
-	from(bucket: "chirpstack")
-	|> range(start: %s, stop: %s)
-	|> filter(fn: (r) => r["_measurement"] == "device_frmpayload_data_temperatureSensor_1")
-	|> filter(fn: (r) => r["_field"] == "value")
-	|> filter(fn: (r) => r["application_name"] == "TestApp")
-	|> filter(fn: (r) => r["dev_eui"] == "%s")
-	|> aggregateWindow(every: 1d, fn: mean, createEmpty: false)
-	|> yield(name: "mean")
-	`,
-		// Use provided times or defaults
-		func() string {
+		from(bucket: "chirpstack")
+		|> range(start: %s, stop: %s)
+		|> filter(fn: (r) => r["_measurement"] == "%s")
+		|> filter(fn: (r) => r["_field"] == "value")
+		|> filter(fn: (r) => r["dev_eui"] == "%s")
+		|> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+		|> yield(name: "mean")
+	`, startTime, endTime, measurement, st.DeviceID)
 
-			return "-30d"
-		}(),
-		func() string {
-
-			return "now()"
-		}(),
-
-		st.DeviceID,
-	)
-
+	// Execute query
 	results, err := s.influx.Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("query error: %w", err)
+		return nil, err
 	}
 
 	var metrics []Metric
 
+	// Parse results
 	for results.Next() {
-		log.Println("goes here???")
 		record := results.Record()
-
 		metrics = append(metrics, Metric{
-			MetricType: MetricMetricTypeTemperature,
+			MetricType: convertMetricType(metricType),
 			StationId:  st.ID,
 			Timestamp:  record.Time().Format(time.RFC3339),
 			Value:      float32(record.Value().(float64)),
@@ -61,10 +61,36 @@ func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject)
 	}
 
 	if results.Err() != nil {
-		return nil, fmt.Errorf("query iteration error: %w", results.Err())
+		return nil, results.Err()
 	}
 
-	log.Println(metrics)
-
 	return GetMetrics200JSONResponse(metrics), nil
+}
+
+// Helper function to map metric types to InfluxDB measurements
+func getInfluxMeasurement(metricType GetMetricsParamsMetricType) string {
+	switch metricType {
+	case GetMetricsParamsMetricTypeTemperature:
+		return "device_frmpayload_data_temperatureSensor_1"
+	case GetMetricsParamsMetricTypeSoilMoisture:
+		return "device_frmpayload_data_soilMoisture"
+	case GetMetricsParamsMetricTypePh:
+		return "device_frmpayload_data_ph"
+	case GetMetricsParamsMetricTypeBatteryLevel:
+		return "device_frmpayload_data_batteryLevel"
+	default:
+		return ""
+	}
+}
+
+// Helper function to convert request metric type to response Metric type
+func convertMetricType(mt GetMetricsParamsMetricType) MetricMetricType {
+	switch mt {
+	case GetMetricsParamsMetricTypeTemperature:
+		return MetricMetricTypeTemperature
+	case GetMetricsParamsMetricTypeSoilMoisture:
+		return MetricMetricTypeSoilMoisture
+	default:
+		return MetricMetricType("")
+	}
 }

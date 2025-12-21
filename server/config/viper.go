@@ -16,6 +16,8 @@ type EnvVars struct {
 	DB_PORT     string `mapstructure:"DB_PORT"`
 	DB_DATABASE string `mapstructure:"DB_DATABASE"`
 	DB_SCHEMA   string `mapstructure:"DB_SCHEMA"`
+
+	CLERK_SECRET_KEY string `mapstructure:"CLERK_SECRET_KEY"`
 }
 
 func LoadConfig() (config EnvVars, err error) {
