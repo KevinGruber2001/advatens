@@ -1,16 +1,19 @@
 import { useQuery } from "@tanstack/react-query"
 import { useApiClient } from "./useApiClient"
 
-export const useMetrics = () => {
+export const useMetrics = (
+  stationId: string,
+  metricType: "temperature" | "soil_moisture" | "ph" | "battery_level"
+) => {
   const apiClient = useApiClient()
 
   return useQuery({
-    queryKey: ["metric", "list"],
+    queryKey: ["metric", "list", stationId, metricType],
     queryFn: () =>
       apiClient.getMetrics({
         queries: {
-          station_id: "e5bb9875-7704-42f3-8033-3409132d9d90",
-          metric_type: "temperature",
+          station_id: stationId,
+          metric_type: metricType,
         },
       }),
   })

@@ -9,7 +9,7 @@ export function useAxiosWithAuth() {
 
   return React.useMemo(() => {
     const instance = axios.create({
-      baseURL: "http://localhost:8888",
+      baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8888",
     })
 
     instance.interceptors.request.use(async (config) => {
@@ -29,7 +29,7 @@ export function useApiClient() {
   const axiosInstance = useAxiosWithAuth()
 
   return React.useMemo(
-    () => createApiClient("http://localhost:8888", { axiosInstance }),
+    () => createApiClient(import.meta.env.VITE_API_BASE_URL || "http://localhost:8888", { axiosInstance }),
     [axiosInstance]
   )
 }

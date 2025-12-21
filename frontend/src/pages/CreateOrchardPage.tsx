@@ -6,15 +6,10 @@ import {
   Alert,
   Button,
   CircularProgress,
-  FormControl,
-  FormHelperText,
-  InputLabel,
-  MenuItem,
-  Select,
   TextField,
   Typography,
 } from "@mui/material"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useApiClient } from "../hooks/useApiClient"
 
 function CreateOrchardPage() {
@@ -26,6 +21,7 @@ function CreateOrchardPage() {
     register,
     handleSubmit,
     formState: { errors },
+    reset
   } = useForm<FormData>({
     resolver: zodResolver(schemas.OrchardCreate),
     defaultValues: {
@@ -38,7 +34,8 @@ function CreateOrchardPage() {
       return apiClient.createOrchard(newOrchard)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["getOrchards"] })
+      queryClient.invalidateQueries({ queryKey: ["orchard", "list"] })
+      reset()
     },
   })
 

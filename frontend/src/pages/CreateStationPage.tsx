@@ -15,11 +15,15 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { useParams } from "react-router"
 
 function CreateStationPage() {
   type FormData = z.infer<typeof schemas.StationCreate>
   const apiClient = useApiClient()
   const queryClient = useQueryClient()
+
+  const { orchardId } = useParams();
+
 
   const form = useForm<FormData>({
     resolver: zodResolver(schemas.StationCreate),
@@ -35,17 +39,22 @@ function CreateStationPage() {
       return apiClient.createStation(newStation)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["getStations"] })
+      queryClient.invalidateQueries({ queryKey: ["orchard", "list"] })
+      form.reset()
     },
   })
 
+  if (!orchardId) {
+    return <div>Orchard ID is missing in the URL.</div>
+  }
+
   const onSubmit = (data: FormData) => {
-    mutation.mutate(data)
+    mutation.mutate({...data, orchard_id: orchardId})
   }
 
   return (
     <Form {...form}>
-      <form className="space-y-8">
+      <form className="space-y-8" onSubmit={form.handleSubmit(onSubmit)}>
         <FormField
           control={form.control}
           name="name"
