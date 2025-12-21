@@ -1,0 +1,523 @@
+openapi: 3.0.3
+
+info:
+  title: Advatens API
+  description: API for Advatens — manage orchards and stations linked to ChirpStack devices
+  version: 0.0.1
+
+tags:
+  - name: orchard
+    description: Manage orchards
+  - name: station
+    description: Manage stations
+
+servers:
+  - url: http://localhost:8888
+
+paths:
+  # Orchard endpoints
+  /orchards:
+    post:
+      tags:
+        - orchard
+      summary: Create a new orchard
+      operationId: createOrchard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrchardCreate'
+      responses:
+        '201':
+          description: Orchard created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Orchard'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags:
+        - orchard
+      summary: Get all orchards for the authenticated user
+      operationId: getOrchards
+      responses:
+        '200':
+          description: List of orchards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Orchard'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /orchards/{orchardId}:
+    parameters:
+      - name: orchardId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the orchard
+
+    get:
+      tags:
+        - orchard
+      summary: Get a single orchard by ID
+      operationId: getOrchard
+      responses:
+        '200':
+          description: Orchard found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Orchard'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Orchard not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - orchard
+      summary: Update orchard partially
+      operationId: updateOrchard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrchardUpdate'
+      responses:
+        '200':
+          description: Orchard updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Orchard'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Orchard not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - orchard
+      summary: Delete an orchard by ID
+      operationId: deleteOrchard
+      responses:
+        '204':
+          description: Orchard deleted successfully (no content)
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Orchard not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+  /orchards/{orchardId}/stations:
+    parameters:
+      - name: orchardId
+        in: path
+        require: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the orchard
+    get:
+      tags:
+        - orchard
+      summary: Get all stations from a orchard
+      operationId: getStationsByOrchard
+      responses:
+        '200':
+          description: List of stations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Station'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Station endpoints
+  /stations:
+    post:
+      tags:
+        - station
+      summary: Create a new station
+      operationId: createStation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StationCreate'
+      responses:
+        '201':
+          description: Station created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Station'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /stations/{stationId}:
+    parameters:
+      - name: stationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the station
+
+    get:
+      tags:
+        - station
+      summary: Get a single station by ID
+      operationId: getStation
+      responses:
+        '200':
+          description: Station found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Station'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      tags:
+        - station
+      summary: Update station partially
+      operationId: updateStation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StationUpdate'
+      responses:
+        '200':
+          description: Station updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Station'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags:
+        - station
+      summary: Delete a station by ID
+      operationId: deleteStation
+      responses:
+        '204':
+          description: Station deleted successfully (no content)
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /metrics:
+    get:
+      tags:
+        - metric
+      summary: Retrieve metric measurements filtered by metric type
+      operationId: getMetrics
+      parameters:
+        - name: metric_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: # optional: use enum if you want to restrict values
+              - temperature
+              - soil_moisture
+              - ph
+              - battery_level
+          description: Metric type to filter by
+        - name: station_id
+          required: true
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by station ID (optional)
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: timestamp
+          description: Start time for query range (optional)
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: timestamp
+          description: End time for query range (optional)
+      responses:
+        '200':
+          description: List of metric measurements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Metric'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Orchard:
+      type: object
+      required:
+        - id
+        - owner_id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the orchard
+        owner_id:
+          type: string
+          description: Clerk user ID of the orchard owner
+        name:
+          type: string
+          description: Name of the orchard
+          minLength: 2
+          maxLength: 32
+        stations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Station'
+          description: Stations belonging to this orchard
+
+    OrchardCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Name of the orchard to be created
+          minLength: 2
+          maxLength: 32
+
+    OrchardUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Updated name of the orchard
+          minLength: 2
+          maxLength: 32
+
+    Station:
+      type: object
+      required:
+        - id
+        - orchard_id
+        - device_id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the station
+        orchard_id:
+          type: string
+          format: uuid
+          description: ID of the orchard this station belongs to
+        name:
+          type: string
+          description: Name of the station
+        device_id:
+          type: string
+          description: ChirpStack device ID linked to this station
+
+    StationCreate:
+      type: object
+      required:
+        - orchard_id
+        - device_id
+        - name
+      properties:
+        orchard_id:
+          type: string
+          format: uuid
+          description: ID of the orchard to add the station to
+        name:
+          type: string
+          description: Name of the station
+        device_id:
+          type: string
+          description: ChirpStack device ID
+
+    StationUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Updated name of the station
+        device_id:
+          type: string
+          description: Updated ChirpStack device ID
+
+    Metric:
+      type: object
+      required:
+        - station_id
+        - metric_type
+        - timestamp
+        - value
+      properties:
+        station_id:
+          type: string
+          format: uuid
+          description: ID of the station that recorded the metric
+        metric_type:
+          type: string
+          description: Type of metric
+          enum:
+            - temperature
+            - soil_moisture
+        timestamp:
+          type: string
+          format: timestamp
+          description: Time when the measurement was taken
+        value:
+          type: number
+          format: float
+          description: Measured value
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: Error code
+        message:
+          type: string
+          description: Error description
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

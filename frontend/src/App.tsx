@@ -1,21 +1,17 @@
 import "./App.css"
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  UserButton,
-} from "@clerk/clerk-react"
+import { SignedIn, SignedOut, SignIn } from "@clerk/clerk-react"
+import Layout from "./Layout"
 
 function App() {
   return (
-    <header>
+    <>
       <SignedOut>
-        <SignInButton />
+        <SignIn />
       </SignedOut>
       <SignedIn>
-        <UserButton />
+        <Layout />
       </SignedIn>
-    </header>
+    </>
   )
 }
 

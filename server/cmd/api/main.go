@@ -3,13 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/clerk/clerk-sdk-go/v2"
+	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"net/http"
 	"os/signal"
+	conf "server/config"
+	"server/internal/migrate"
+	"server/internal/server"
 	"syscall"
 	"time"
-
-	"server/internal/server"
 )
 
 func gracefulShutdown(apiServer *http.Server, done chan bool) {
@@ -39,20 +46,143 @@ func gracefulShutdown(apiServer *http.Server, done chan bool) {
 
 func main() {
 
-	server := server.NewServer()
+	ctx := context.Background()
+
+	env, err := conf.LoadConfig()
+
+	if err != nil {
+		log.Fatalf("Error loading config: %v", err)
+	}
+	// Setup Logger
+
+	// Setup Postgres
+
+	dbUrl := fmt.Sprintf(
+		"postgresql://%s:%s@%s:%s/%s?sslmode=disable&search_path=%s",
+		env.DB_USERNAME,
+		env.DB_PASSWORD,
+		env.DB_HOST,
+		env.DB_PORT,
+		env.DB_DATABASE,
+		env.DB_SCHEMA,
+	)
+
+	config, err := pgxpool.ParseConfig(dbUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer pool.Close()
+
+	err = migrate.Migrate(pool)
+
+	if err != nil {
+		log.Print("Failed to migrate database")
+	}
+
+	// Setup Influx
+
+	token := env.INFLUXDB_TOKEN
+	url := env.INFLUXDB_URL
+	client := influxdb2.NewClient(url, token)
+	queryApi := client.QueryAPI(env.INFLUXDB_ORG)
+
+	serverImpl := server.NewServer(pool, queryApi)
+
+	clerk.SetKey("sk_test_EZgqNlgxvPvbaQxEJuNumBOc2jqUAJQaR3yc9dUqxb")
+
+	strictHandler := server.NewStrictHandler(serverImpl, []server.StrictMiddlewareFunc{})
+
+	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
+		AllowAllOrigins:  true,
+		AllowCredentials: true,
+	}))
+
+	r.Use(ClerkAuthMiddleware())
+	r.Use(LogContextMiddleware())
+	server.RegisterHandlers(r, strictHandler)
+
+	httpServer := &http.Server{Addr: ":8888", Handler: r}
 
 	// Create a done channel to signal when the shutdown is complete
 	done := make(chan bool, 1)
 
 	// Run graceful shutdown in a separate goroutine
-	go gracefulShutdown(server, done)
+	go gracefulShutdown(httpServer, done)
 
-	err := server.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
-		panic(fmt.Sprintf("http server error: %s", err))
+	// Start the server
+	log.Println("Starting server on :8888")
+	err = httpServer.ListenAndServe()
+	if err != nil {
+		log.Panicf("HTTP server error: %v", err)
 	}
 
 	// Wait for the graceful shutdown to complete
 	<-done
 	log.Println("Graceful shutdown complete.")
+}
+
+func ClerkAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		log.Printf("Authorization header: %s", authHeader)
+
+		writer := &responseCaptureWriter{ResponseWriter: c.Writer, statusCode: 200}
+
+		handler := clerkhttp.RequireHeaderAuthorization()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Extract claims from Clerk session (if possible)
+			claims, ok := clerk.SessionClaimsFromContext(r.Context())
+			if !ok {
+				log.Println("No claims found in middleware")
+				// Optionally abort here or continue depending on your auth flow
+			} else {
+				// Add user ID to Gin context
+				c.Set("userID", claims.Subject)
+
+				// Also add to request context if you want
+				ctx := context.WithValue(r.Context(), "userID", claims.Subject)
+				r = r.WithContext(ctx)
+			}
+
+			c.Request = r
+		}))
+
+		handler.ServeHTTP(writer, c.Request)
+
+		if writer.statusCode == http.StatusUnauthorized || writer.statusCode == http.StatusForbidden {
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func LogContextMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		val := c.Request.Context().Value("test123")
+		log.Printf("Context 'test123' value: %v", val)
+		c.Next()
+	}
+}
+
+// Helper to capture status code from ResponseWriter
+type responseCaptureWriter struct {
+	gin.ResponseWriter
+	statusCode int
+}
+
+func (w *responseCaptureWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
 }

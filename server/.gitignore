@@ -22,8 +22,8 @@ tmp/
 .vscode
 .idea
 
-# .env file
-.env
+# app.env file
+app.env
 
 # Project build
 main

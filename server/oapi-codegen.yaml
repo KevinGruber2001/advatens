@@ -1,4 +1,4 @@
-package: api
+package: server
 output: internal/server/api.gen.go
 
 generate:
