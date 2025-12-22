@@ -1,4 +1,4 @@
-import { UserAvatar, UserButton, UserProfile } from "@clerk/clerk-react"
+import { UserButton } from "@clerk/clerk-react"
 import { ModeToggle } from "./ModeToggle"
 
 function AppNavBar() {

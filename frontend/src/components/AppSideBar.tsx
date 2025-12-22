@@ -9,19 +9,18 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "./ui/sidebar"
 import { Separator } from "./ui/separator"
-import { GlassWater, LoaderCircle, Plus } from "lucide-react"
+import { GlassWater, Plus } from "lucide-react"
 import { useOrchards } from "@/hooks/useOrchards"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
 import CreateStation from "./CreateStation"
 import CreateOrchard from "./CreateOrchard"
 
 function AppSideBar() {
-  const { data, isLoading, error, isError } = useOrchards()
+  const { data, isLoading, isError } = useOrchards()
   const location = useLocation()
 
   if (isLoading) return <></>
