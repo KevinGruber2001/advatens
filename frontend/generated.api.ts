@@ -62,7 +62,12 @@ const StationUpdate = z
 const Metric = z
   .object({
     station_id: z.string().uuid(),
-    metric_type: z.enum(["temperature", "soil_moisture"]),
+    metric_type: z.enum([
+      "temperature",
+      "soil_moisture",
+      "ph",
+      "battery_level",
+    ]),
     timestamp: z.string(),
     value: z.number(),
   })

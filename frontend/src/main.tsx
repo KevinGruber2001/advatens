@@ -12,6 +12,7 @@ import CreateOrchardPage from "./pages/CreateOrchardPage.tsx"
 import CreateStationPage from "./pages/CreateStationPage.tsx"
 import { SidebarProvider } from "./components/ui/sidebar.tsx"
 import HomePage from "./components/Homepage.tsx"
+import StationOverview from "./components/StationOverview.tsx"
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
@@ -31,6 +32,7 @@ function Root() {
               <Routes>
                 <Route path="/" element={<App />}>
                   <Route index element={<HomePage />} />
+                  <Route path="station/:stationId" element={<StationOverview />} />
                   <Route
                     path="orchard/create"
                     element={<CreateOrchardPage />}

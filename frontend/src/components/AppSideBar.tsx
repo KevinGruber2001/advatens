@@ -1,4 +1,4 @@
-import { Link } from "react-router"
+import { Link, useLocation } from "react-router"
 import {
   Sidebar,
   SidebarContent,
@@ -22,6 +22,7 @@ import CreateOrchard from "./CreateOrchard"
 
 function AppSideBar() {
   const { data, isLoading, error, isError } = useOrchards()
+  const location = useLocation()
 
   if (isLoading) return <></>
 
@@ -57,15 +58,19 @@ function AppSideBar() {
             </SidebarGroupAction>
             <SidebarGroupContent>
               <SidebarMenu>
-                {orchard.stations?.map((station) => (
+                {orchard.stations?.map((station) => {
+                  const isActive = location.pathname === `/station/${station.id}`
+
+                  return (
                   <SidebarMenuItem key={station.id}>
-                    <SidebarMenuButton>
-                      <Link to={`orchard/${orchard.id}/station/create`}>
+                    <SidebarMenuButton asChild isActive={isActive}>
+                      <Link to={`station/${station.id}`}>
                         {station.name}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
+                )
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

@@ -1,9 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { useApiClient } from "./useApiClient"
+import type z from "zod"
+import type { schemas } from "generated.api"
+
+type MetricType = z.infer<typeof schemas.Metric>["metric_type"]
 
 export const useMetrics = (
   stationId: string,
-  metricType: "temperature" | "soil_moisture" | "ph" | "battery_level"
+  metricType: MetricType
 ) => {
   const apiClient = useApiClient()
 

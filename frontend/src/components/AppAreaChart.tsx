@@ -15,6 +15,10 @@ import {
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { TrendingUp } from "lucide-react"
 import { useMetrics } from "@/hooks/useMetrics"
+import type z from "zod"
+import type { schemas } from "generated.api"
+
+type MetricType = z.infer<typeof schemas.Metric>["metric_type"]
 
 const chartConfig = {
   desktop: {
@@ -23,8 +27,14 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-function AppAreaChart() {
-  const { data, isPending, isError, error } = useMetrics()
+interface AppAreaChartProps {
+  stationId: string
+  metricType: MetricType
+}
+
+
+function AppAreaChart({stationId, metricType}: AppAreaChartProps) {
+  const { data, isPending, isError, error } = useMetrics(stationId, metricType)
 
   if (isPending) {
     return <>Pending</>
