@@ -2,18 +2,58 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"log"
+	conf "server/config"
+	"server/internal/chirpstack"
 	db "server/internal/db/sqlc"
 )
 
 func (s Server) CreateStation(ctx context.Context, request CreateStationRequestObject) (CreateStationResponseObject, error) {
 
-	station, err := s.queries.CreateStation(ctx, db.CreateStationParams{
-		Name:      request.Body.Name,
-		DeviceID:  request.Body.DeviceId,
-		OrchardID: request.Body.OrchardId,
+	// Verify Orchard Exists
+	orchard, err := s.queries.GetOrchardById(ctx, request.Body.OrchardId)
+	if err != nil {
+		log.Printf("error getting orchard: %v", err)
+		return nil, err
+	}
+
+	env, err := conf.LoadConfig()
+
+	if err != nil {
+		log.Printf("error loading config: %v", err)
+		return nil, err
+	}
+
+	// Create Device in Chirpstack first
+	// Create device in ChirpStack FIRST
+	_, err = s.chirpstack.CreateDevice(ctx, chirpstack.CreateDeviceRequest{
+		DevEUI:          request.Body.DeviceId,
+		Name:            request.Body.Name,
+		Description:     fmt.Sprintf("Station for orchard: %s", orchard.Name),
+		ApplicationID:   env.CHIRPSTACK_APPLICATION_ID,
+		DeviceProfileID: env.CHIRPSTACK_DEVICE_PROFILE_ID, // Need to configure this
 	})
 
 	if err != nil {
+		log.Printf("error creating chirpstack device: %v", err)
+		return nil, err
+	}
+
+	station, err := s.queries.CreateStation(ctx, db.CreateStationParams{
+		Name:      request.Body.Name,
+		DeviceID:  request.Body.DeviceId,
+		OrchardID: orchard.ID,
+	})
+
+	if err != nil {
+		// Rollback: Delete from Chirpstack if DB insert fails
+		deleteErr := s.chirpstack.DeleteDevice(ctx, request.Body.DeviceId)
+		if deleteErr != nil {
+			log.Printf("error rolling back chirpstack device: %v", deleteErr)
+		}
+
+		log.Println("Error creating station: %v", err)
 		return nil, err
 	}
 
@@ -62,10 +102,24 @@ func (s Server) UpdateStation(ctx context.Context, request UpdateStationRequestO
 }
 
 func (s Server) DeleteStation(ctx context.Context, request DeleteStationRequestObject) (DeleteStationResponseObject, error) {
-	err := s.queries.DeleteStation(ctx, request.StationId)
 
+	station, err := s.queries.GetStationById(ctx, request.StationId)
 	if err != nil {
+		log.Printf("error getting station: %v", err)
 		return nil, err
 	}
+
+	// Delete from Chirpstack
+	err = s.chirpstack.DeleteDevice(ctx, station.DeviceID)
+	if err != nil {
+		log.Printf("error deleting chirpstack device: %v", err)
+	}
+
+	err = s.queries.DeleteStation(ctx, request.StationId)
+	if err != nil {
+		log.Printf("error deleting station: %v", err)
+		return nil, err
+	}
+
 	return DeleteStation204Response{}, nil
 }

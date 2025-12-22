@@ -18,6 +18,11 @@ type EnvVars struct {
 	DB_SCHEMA   string `mapstructure:"DB_SCHEMA"`
 
 	CLERK_SECRET_KEY string `mapstructure:"CLERK_SECRET_KEY"`
+
+	CHIRPSTACK_API_URL           string `mapstructure:"CHIRPSTACK_API_URL"`
+	CHIRPSTACK_API_TOKEN         string `mapstructure:"CHIRPSTACK_API_TOKEN"`
+	CHIRPSTACK_APPLICATION_ID    string `mapstructure:"CHIRPSTACK_APPLICATION_ID"`
+	CHIRPSTACK_DEVICE_PROFILE_ID string `mapstructure:"CHIRPSTACK_DEVICE_PROFILE_ID"`
 }
 
 func LoadConfig() (config EnvVars, err error) {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os/signal"
 	conf "server/config"
+	"server/internal/chirpstack"
 	"server/internal/migrate"
 	"server/internal/server"
 	"syscall"
@@ -94,7 +95,14 @@ func main() {
 	client := influxdb2.NewClient(url, token)
 	queryApi := client.QueryAPI(env.INFLUXDB_ORG)
 
-	serverImpl := server.NewServer(pool, queryApi)
+	// Setup Chirpstack
+
+	chirpStackClient, err := chirpstack.NewClient(env.CHIRPSTACK_API_URL, env.CHIRPSTACK_API_TOKEN)
+
+	if err != nil {
+		log.Fatalf("Error creating chirpstack client: %v", err)
+	}
+	serverImpl := server.NewServer(pool, queryApi, chirpStackClient)
 
 	if env.CLERK_SECRET_KEY == "" {
 		log.Fatal("CLERK_SECRET_KEY environment variable is required")
@@ -114,7 +122,6 @@ func main() {
 	}))
 
 	r.Use(ClerkAuthMiddleware())
-	r.Use(LogContextMiddleware())
 	server.RegisterHandlers(r, strictHandler)
 
 	httpServer := &http.Server{Addr: ":8888", Handler: r}
@@ -169,14 +176,6 @@ func ClerkAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Next()
-	}
-}
-
-func LogContextMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		val := c.Request.Context().Value("test123")
-		log.Printf("Context 'test123' value: %v", val)
 		c.Next()
 	}
 }
