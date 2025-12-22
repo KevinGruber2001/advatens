@@ -1,6 +1,9 @@
 package config
 
-import "github.com/spf13/viper"
+import (
+	"github.com/spf13/viper"
+	"log"
+)
 
 type EnvVars struct {
 	AUTH0_DOMAIN    string `mapstructure:"AUTH0_DOMAIN"`
@@ -34,7 +37,7 @@ func LoadConfig() (config EnvVars, err error) {
 
 	err = viper.ReadInConfig()
 	if err != nil {
-		return
+		log.Println("No config file found, using environment variables")
 	}
 
 	err = viper.Unmarshal(&config)

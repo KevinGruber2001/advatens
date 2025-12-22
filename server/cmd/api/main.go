@@ -102,7 +102,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error creating chirpstack client: %v", err)
 	}
-	serverImpl := server.NewServer(pool, queryApi, chirpStackClient)
+	serverImpl := server.NewServer(pool, queryApi, chirpStackClient, &env)
 
 	if env.CLERK_SECRET_KEY == "" {
 		log.Fatal("CLERK_SECRET_KEY environment variable is required")

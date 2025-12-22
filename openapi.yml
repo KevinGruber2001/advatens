@@ -494,6 +494,8 @@ components:
           enum:
             - temperature
             - soil_moisture
+            - ph
+            - battery_level
         timestamp:
           type: string
           format: timestamp

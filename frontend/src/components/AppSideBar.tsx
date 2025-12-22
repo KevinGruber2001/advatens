@@ -63,7 +63,7 @@ function AppSideBar() {
                   return (
                   <SidebarMenuItem key={station.id}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <Link to={`station/${station.id}`}>
+                      <Link to={`/station/${station.id}`}>
                         {station.name}
                       </Link>
                     </SidebarMenuButton>

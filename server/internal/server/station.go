@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	conf "server/config"
 	"server/internal/chirpstack"
 	db "server/internal/db/sqlc"
 )
@@ -18,21 +17,14 @@ func (s Server) CreateStation(ctx context.Context, request CreateStationRequestO
 		return nil, err
 	}
 
-	env, err := conf.LoadConfig()
-
-	if err != nil {
-		log.Printf("error loading config: %v", err)
-		return nil, err
-	}
-
 	// Create Device in Chirpstack first
 	// Create device in ChirpStack FIRST
 	_, err = s.chirpstack.CreateDevice(ctx, chirpstack.CreateDeviceRequest{
 		DevEUI:          request.Body.DeviceId,
 		Name:            request.Body.Name,
 		Description:     fmt.Sprintf("Station for orchard: %s", orchard.Name),
-		ApplicationID:   env.CHIRPSTACK_APPLICATION_ID,
-		DeviceProfileID: env.CHIRPSTACK_DEVICE_PROFILE_ID, // Need to configure this
+		ApplicationID:   s.config.CHIRPSTACK_APPLICATION_ID,
+		DeviceProfileID: s.config.CHIRPSTACK_DEVICE_PROFILE_ID, // Need to configure this
 	})
 
 	if err != nil {
