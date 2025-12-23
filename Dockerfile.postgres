@@ -1,0 +1,7 @@
+FROM postgres:15-alpine
+
+# Copy the init script that creates required extensions
+COPY chirpstack/configuration/postgresql/initdb/001-chirpstack_extensions.sh /docker-entrypoint-initdb.d/
+
+# Ensure script is executable
+RUN chmod +x /docker-entrypoint-initdb.d/001-chirpstack_extensions.sh
