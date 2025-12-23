@@ -31,7 +31,7 @@ function CreateStation({ orchardId }: { orchardId: string }) {
     defaultValues: {
       name: "",
       device_id: "",
-      orchard_id: "",
+      orchard_id: orchardId || "",
     },
   })
 
