@@ -47,7 +47,7 @@ func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject)
 		return nil, err
 	}
 
-	var metrics []Metric
+	metrics := make([]Metric, 0)
 
 	// Parse results
 	for results.Next() {
