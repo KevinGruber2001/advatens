@@ -3,7 +3,9 @@ version: '3.8'
 services:
   # PostgreSQL Database (shared by Advatens and ChirpStack)
   postgres:
-    image: postgres:15-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE:-advatens}
@@ -13,7 +15,6 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./chirpstack/configuration/postgresql/initdb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-advatens}"]
       interval: 10s
