@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+
 	"github.com/spf13/viper"
 	"log"
 )
@@ -41,5 +43,54 @@ func LoadConfig() (config EnvVars, err error) {
 	}
 
 	err = viper.Unmarshal(&config)
+
+	// Fallback: if viper didn't load the env vars, read directly from os.Getenv
+	// This ensures environment variables always work in Docker
+	if config.CHIRPSTACK_API_URL == "" {
+		config.CHIRPSTACK_API_URL = os.Getenv("CHIRPSTACK_API_URL")
+	}
+	if config.DB_HOST == "" {
+		config.DB_HOST = os.Getenv("DB_HOST")
+	}
+	if config.DB_PORT == "" {
+		config.DB_PORT = os.Getenv("DB_PORT")
+	}
+	if config.DB_USERNAME == "" {
+		config.DB_USERNAME = os.Getenv("DB_USERNAME")
+	}
+	if config.DB_PASSWORD == "" {
+		config.DB_PASSWORD = os.Getenv("DB_PASSWORD")
+	}
+	if config.DB_DATABASE == "" {
+		config.DB_DATABASE = os.Getenv("DB_DATABASE")
+	}
+	if config.DB_SCHEMA == "" {
+		config.DB_SCHEMA = os.Getenv("DB_SCHEMA")
+	}
+	if config.INFLUXDB_URL == "" {
+		config.INFLUXDB_URL = os.Getenv("INFLUXDB_URL")
+	}
+	if config.INFLUXDB_TOKEN == "" {
+		config.INFLUXDB_TOKEN = os.Getenv("INFLUXDB_TOKEN")
+	}
+	if config.INFLUXDB_ORG == "" {
+		config.INFLUXDB_ORG = os.Getenv("INFLUXDB_ORG")
+	}
+	if config.INFLUXDB_BUCKET == "" {
+		config.INFLUXDB_BUCKET = os.Getenv("INFLUXDB_BUCKET")
+	}
+	if config.CLERK_SECRET_KEY == "" {
+		config.CLERK_SECRET_KEY = os.Getenv("CLERK_SECRET_KEY")
+	}
+	if config.CHIRPSTACK_API_TOKEN == "" {
+		config.CHIRPSTACK_API_TOKEN = os.Getenv("CHIRPSTACK_API_TOKEN")
+	}
+	if config.CHIRPSTACK_APPLICATION_ID == "" {
+		config.CHIRPSTACK_APPLICATION_ID = os.Getenv("CHIRPSTACK_APPLICATION_ID")
+	}
+	if config.CHIRPSTACK_DEVICE_PROFILE_ID == "" {
+		config.CHIRPSTACK_DEVICE_PROFILE_ID = os.Getenv("CHIRPSTACK_DEVICE_PROFILE_ID")
+	}
+
 	return
 }
