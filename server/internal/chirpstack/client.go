@@ -2,11 +2,10 @@ package chirpstack
 
 import (
 	"context"
-	"crypto/tls"
 
 	"github.com/chirpstack/chirpstack/api/go/v4/api"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -16,15 +15,11 @@ type Client struct {
 }
 
 func NewClient(serverAddr, apiToken string) (*Client, error) {
-	// Setup TLS config (use insecure for local development)
-	creds := credentials.NewTLS(&tls.Config{
-		InsecureSkipVerify: true,
-	})
 
 	// Create gRPC connection
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		serverAddr,
-		grpc.WithTransportCredentials(creds),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		return nil, err
