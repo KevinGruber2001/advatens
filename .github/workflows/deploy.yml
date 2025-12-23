@@ -1,0 +1,53 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Deploy to Hostinger
+        uses: hostinger/deploy-on-vps@v2
+        with:
+          api-key: ${{ secrets.HOSTINGER_API_KEY }}
+          virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
+          project-name: advatens
+          docker-compose-path: docker-compose.yml
+          environment-variables: |
+            # Database Configuration
+            DB_HOST=postgres
+            DB_PORT=5432
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_SCHEMA=public
+
+            # InfluxDB Configuration
+            INFLUXDB_URL=http://influxdb:8086
+            INFLUXDB_TOKEN=${{ secrets.INFLUXDB_TOKEN }}
+            INFLUXDB_ORG=chirpstack
+            INFLUXDB_BUCKET=chirpstack
+            INFLUXDB_ADMIN_USER=admin
+            INFLUXDB_ADMIN_PASSWORD=${{ secrets.INFLUXDB_ADMIN_PASSWORD }}
+
+            # Clerk Authentication
+            CLERK_SECRET_KEY=${{ secrets.CLERK_SECRET_KEY }}
+            VITE_CLERK_PUBLISHABLE_KEY=${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+
+            # ChirpStack Configuration
+            CHIRPSTACK_API_URL=chirpstack:8080
+            CHIRPSTACK_API_TOKEN=${{ secrets.CHIRPSTACK_API_TOKEN }}
+            CHIRPSTACK_APPLICATION_ID=${{ secrets.CHIRPSTACK_APPLICATION_ID }}
+            CHIRPSTACK_DEVICE_PROFILE_ID=${{ secrets.CHIRPSTACK_DEVICE_PROFILE_ID }}
+
+            # Frontend Configuration
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+
+            # Grafana Configuration
+            GRAFANA_ADMIN_USER=admin
+            GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}

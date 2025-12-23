@@ -38,7 +38,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./chirpstack/configuration/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./chirpstack/configuration/mosquitto/config/:/mosquitto/config/
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     networks:
@@ -52,11 +52,11 @@ services:
       - "8086:8086"
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: adminadmin
-      DOCKER_INFLUXDB_INIT_ORG: chirpstack
-      DOCKER_INFLUXDB_INIT_BUCKET: chirpstack
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: E80i_botL6jBbAI2uFc_rvI4nnqqew_FOXoV0_kHYT4LxvZzk5QVv3H8fn1aQrILa4CM4l54cy3ToEsvn8WPDQ==
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:-adminadmin}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-chirpstack}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-chirpstack}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
     volumes:
       - influxdb_data:/var/lib/influxdb2
     networks:
@@ -70,9 +70,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      POSTGRESQL__DSN: postgres://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres}@postgres/${DB_DATABASE:-advatens}?sslmode=disable
-      REDIS__SERVERS: redis://redis:6379
-      MONITORING__BIND: 0.0.0.0:8080
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_USER: ${DB_USERNAME:-postgres}
+      POSTGRESQL_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRESQL_DB: ${DB_DATABASE:-advatens}
+      REDIS_HOST: redis
+      MQTT_BROKER_HOST: mosquitto
     volumes:
       - ./chirpstack/configuration/chirpstack:/etc/chirpstack
       - chirpstack_lorawan_frames:/opt/lorawan-frames
@@ -105,7 +108,7 @@ services:
     restart: unless-stopped
     command: -c /etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge-basicstation-eu868.toml
     ports:
-      - "3001:3001"
+      - "3002:3001"
     volumes:
       - ./chirpstack/configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
     depends_on:
@@ -132,8 +135,8 @@ services:
     ports:
       - "3001:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./chirpstack/configuration/grafana/provisioning:/etc/grafana/provisioning
@@ -157,20 +160,20 @@ services:
       DB_DATABASE: ${DB_DATABASE:-advatens}
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_SCHEMA: public
+      DB_SCHEMA: ${DB_SCHEMA:-public}
 
       # InfluxDB
       INFLUXDB_URL: http://influxdb:8086
-      INFLUXDB_TOKEN: E80i_botL6jBbAI2uFc_rvI4nnqqew_FOXoV0_kHYT4LxvZzk5QVv3H8fn1aQrILa4CM4l54cy3ToEsvn8WPDQ==
-      INFLUXDB_ORG: chirpstack
-      INFLUXDB_BUCKET: chirpstack
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-chirpstack}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-chirpstack}
 
       # Clerk
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
 
       # ChirpStack
       CHIRPSTACK_API_URL: chirpstack:8080
-      CHIRPSTACK_API_TOKEN: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjaGlycHN0YWNrIiwiaXNzIjoiY2hpcnBzdGFjayIsInN1YiI6IjNiN2NlZjM1LTMxOWUtNDNiMC1iZmFjLWJlNGFhNGU0NTkwNiIsInR5cCI6ImtleSJ9.tKESoyJzkR-1uRqkOQSf6M8AMN-8ycAScoy3UcfHSn8
+      CHIRPSTACK_API_TOKEN: ${CHIRPSTACK_API_TOKEN}
       CHIRPSTACK_APPLICATION_ID: ${CHIRPSTACK_APPLICATION_ID}
       CHIRPSTACK_DEVICE_PROFILE_ID: ${CHIRPSTACK_DEVICE_PROFILE_ID}
     depends_on:
@@ -186,8 +189,8 @@ services:
   # Advatens React Frontend
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8888}
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
