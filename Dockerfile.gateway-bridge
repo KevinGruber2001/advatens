@@ -1,0 +1,5 @@
+# Custom ChirpStack Gateway Bridge image with embedded configuration
+FROM chirpstack/chirpstack-gateway-bridge:4
+
+# Copy all configuration files into the image
+COPY chirpstack/configuration/chirpstack-gateway-bridge /etc/chirpstack-gateway-bridge

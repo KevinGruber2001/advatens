@@ -1,0 +1,5 @@
+# Custom Mosquitto image with embedded configuration
+FROM eclipse-mosquitto:2
+
+# Copy configuration file into the image
+COPY chirpstack/configuration/mosquitto/config/mosquitto.conf /mosquitto/config/mosquitto.conf
