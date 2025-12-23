@@ -1,0 +1,9 @@
+# Custom ChirpStack image with embedded configuration
+FROM chirpstack/chirpstack:4
+
+# Copy configuration files into the image
+COPY chirpstack/configuration/chirpstack /etc/chirpstack
+COPY chirpstack/configuration/postgresql/initdb /docker-entrypoint-initdb.d
+
+# Use the same command as the base image
+CMD ["-c", "/etc/chirpstack"]
