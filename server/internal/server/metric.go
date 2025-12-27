@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -13,6 +14,7 @@ func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject)
 	// Validate station exists
 	st, err := s.queries.GetStationById(ctx, stationId)
 	if err != nil {
+		log.Printf("Error getting station by id %s: %s", stationId, err)
 		return nil, err
 	}
 
@@ -44,6 +46,7 @@ func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject)
 	// Execute query
 	results, err := s.influx.Query(ctx, query)
 	if err != nil {
+		log.Printf("Error getting metrics: %s", err)
 		return nil, err
 	}
 
@@ -61,6 +64,7 @@ func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject)
 	}
 
 	if results.Err() != nil {
+		log.Printf("Error getting metrics: %s", results.Err())
 		return nil, results.Err()
 	}
 
