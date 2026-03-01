@@ -21,6 +21,8 @@ const (
 
 // Defines values for MetricMetricType.
 const (
+	MetricMetricTypeBatteryLevel MetricMetricType = "battery_level"
+	MetricMetricTypePh           MetricMetricType = "ph"
 	MetricMetricTypeSoilMoisture MetricMetricType = "soil_moisture"
 	MetricMetricTypeTemperature  MetricMetricType = "temperature"
 )

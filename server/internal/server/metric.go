@@ -2,23 +2,30 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 )
+
+const metricsQuery = `
+from(bucket: "chirpstack")
+	|> range(start: duration(v: params.startTime), stop: duration(v: params.endTime))
+	|> filter(fn: (r) => r["_measurement"] == params.measurement)
+	|> filter(fn: (r) => r["_field"] == "value")
+	|> filter(fn: (r) => r["dev_eui"] == params.devEUI)
+	|> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+	|> yield(name: "mean")
+`
 
 func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject) (GetMetricsResponseObject, error) {
 	stationId := request.Params.StationId
 	metricType := request.Params.MetricType
 
-	// Validate station exists
 	st, err := s.queries.GetStationById(ctx, stationId)
 	if err != nil {
 		log.Printf("Error getting station by id %s: %s", stationId, err)
 		return nil, err
 	}
 
-	// Determine time range
 	startTime := "-30d"
 	if request.Params.StartTime != nil {
 		startTime = *request.Params.StartTime
@@ -29,22 +36,14 @@ func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject)
 		endTime = *request.Params.EndTime
 	}
 
-	// Map metric type to InfluxDB measurement
-	measurement := getInfluxMeasurement(metricType)
+	params := map[string]string{
+		"startTime":   startTime,
+		"endTime":     endTime,
+		"measurement": getInfluxMeasurement(metricType),
+		"devEUI":      st.DeviceID,
+	}
 
-	// Build InfluxDB query
-	query := fmt.Sprintf(`
-		from(bucket: "chirpstack")
-		|> range(start: %s, stop: %s)
-		|> filter(fn: (r) => r["_measurement"] == "%s")
-		|> filter(fn: (r) => r["_field"] == "value")
-		|> filter(fn: (r) => r["dev_eui"] == "%s")
-		|> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
-		|> yield(name: "mean")
-	`, startTime, endTime, measurement, st.DeviceID)
-
-	// Execute query
-	results, err := s.influx.Query(ctx, query)
+	results, err := s.influx.QueryWithParams(ctx, metricsQuery, params)
 	if err != nil {
 		log.Printf("Error getting metrics: %s", err)
 		return nil, err
@@ -87,13 +86,16 @@ func getInfluxMeasurement(metricType GetMetricsParamsMetricType) string {
 	}
 }
 
-// Helper function to convert request metric type to response Metric type
 func convertMetricType(mt GetMetricsParamsMetricType) MetricMetricType {
 	switch mt {
 	case GetMetricsParamsMetricTypeTemperature:
 		return MetricMetricTypeTemperature
 	case GetMetricsParamsMetricTypeSoilMoisture:
 		return MetricMetricTypeSoilMoisture
+	case GetMetricsParamsMetricTypePh:
+		return MetricMetricTypePh
+	case GetMetricsParamsMetricTypeBatteryLevel:
+		return MetricMetricTypeBatteryLevel
 	default:
 		return MetricMetricType("")
 	}

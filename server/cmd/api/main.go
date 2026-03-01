@@ -92,8 +92,9 @@ func main() {
 
 	token := env.INFLUXDB_TOKEN
 	url := env.INFLUXDB_URL
-	client := influxdb2.NewClient(url, token)
-	queryApi := client.QueryAPI(env.INFLUXDB_ORG)
+	influxClient := influxdb2.NewClient(url, token)
+	defer influxClient.Close()
+	queryApi := influxClient.QueryAPI(env.INFLUXDB_ORG)
 
 	// Setup Chirpstack
 
