@@ -1,48 +1,21 @@
 #include <Arduino.h>
-#include "LoRaWan_APP.h"
-#include "lora_app.h"
-#include "config.h"
+
+// put function declarations here:
+int myFunction(int, int);
 
 void setup()
 {
-  Serial.begin(115200);
-  Mcu.begin(HELTEC_BOARD, SLOW_CLK_TPYE);
+  // put your setup code here, to run once:
+  int result = myFunction(2, 3);
 }
 
 void loop()
 {
-  switch (deviceState)
-  {
-  case DEVICE_STATE_INIT:
-#if (LORAWAN_DEVEUI_AUTO)
-    LoRaWAN.generateDeveuiByChipID();
-#endif
-    LoRaWAN.init(loraWanClass, loraWanRegion);
-    LoRaWAN.setDefaultDR(3);
-    break;
+  // put your main code here, to run repeatedly:
+}
 
-  case DEVICE_STATE_JOIN:
-    LoRaWAN.join();
-    break;
-
-  case DEVICE_STATE_SEND:
-    prepareTxFrame(appPort);
-    LoRaWAN.send();
-    deviceState = DEVICE_STATE_CYCLE;
-    break;
-
-  case DEVICE_STATE_CYCLE:
-    txDutyCycleTime = appTxDutyCycle + randr(-APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND);
-    LoRaWAN.cycle(txDutyCycleTime);
-    deviceState = DEVICE_STATE_SLEEP;
-    break;
-
-  case DEVICE_STATE_SLEEP:
-    LoRaWAN.sleep(loraWanClass);
-    break;
-
-  default:
-    deviceState = DEVICE_STATE_INIT;
-    break;
-  }
+// put function definitions here:
+int myFunction(int x, int y)
+{
+  return x + y;
 }
