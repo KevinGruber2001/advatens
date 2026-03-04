@@ -334,6 +334,7 @@ paths:
             enum: # optional: use enum if you want to restrict values
               - temperature
               - soil_moisture
+              - humidity
               - ph
               - battery_level
           description: Metric type to filter by
@@ -494,6 +495,7 @@ components:
           enum:
             - temperature
             - soil_moisture
+            - humidity
             - ph
             - battery_level
         timestamp:

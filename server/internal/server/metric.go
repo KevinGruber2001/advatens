@@ -76,11 +76,13 @@ func getInfluxMeasurement(metricType GetMetricsParamsMetricType) string {
 	case GetMetricsParamsMetricTypeTemperature:
 		return "device_frmpayload_data_temperatureSensor_1"
 	case GetMetricsParamsMetricTypeSoilMoisture:
-		return "device_frmpayload_data_soilMoisture"
+		return "device_frmpayload_data_analogInput_3"
+	case GetMetricsParamsMetricTypeHumidity:
+		return "device_frmpayload_data_relativeHumidity_2"
 	case GetMetricsParamsMetricTypePh:
 		return "device_frmpayload_data_ph"
 	case GetMetricsParamsMetricTypeBatteryLevel:
-		return "device_frmpayload_data_batteryLevel"
+		return "device_frmpayload_data_analogInput_4"
 	default:
 		return ""
 	}
@@ -92,6 +94,8 @@ func convertMetricType(mt GetMetricsParamsMetricType) MetricMetricType {
 		return MetricMetricTypeTemperature
 	case GetMetricsParamsMetricTypeSoilMoisture:
 		return MetricMetricTypeSoilMoisture
+	case GetMetricsParamsMetricTypeHumidity:
+		return MetricMetricTypeHumidity
 	case GetMetricsParamsMetricTypePh:
 		return MetricMetricTypePh
 	case GetMetricsParamsMetricTypeBatteryLevel:
