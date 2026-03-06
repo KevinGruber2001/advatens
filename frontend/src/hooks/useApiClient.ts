@@ -1,11 +1,14 @@
 import axios, { AxiosHeaders } from "axios"
 import { useAuth } from "@clerk/clerk-react"
+import { useMockAuth } from "../mocks/MockClerkProvider"
 import React from "react"
 
 import { createApiClient } from "../../generated.api"
 
+const IS_MOCK = import.meta.env.VITE_MOCK === "true"
+
 export function useAxiosWithAuth() {
-  const { getToken } = useAuth()
+  const { getToken } = IS_MOCK ? useMockAuth() : useAuth()
 
   return React.useMemo(() => {
     const instance = axios.create({
