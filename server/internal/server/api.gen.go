@@ -22,6 +22,7 @@ const (
 // Defines values for MetricMetricType.
 const (
 	MetricMetricTypeBatteryLevel MetricMetricType = "battery_level"
+	MetricMetricTypeHumidity     MetricMetricType = "humidity"
 	MetricMetricTypePh           MetricMetricType = "ph"
 	MetricMetricTypeSoilMoisture MetricMetricType = "soil_moisture"
 	MetricMetricTypeTemperature  MetricMetricType = "temperature"
@@ -30,6 +31,7 @@ const (
 // Defines values for GetMetricsParamsMetricType.
 const (
 	GetMetricsParamsMetricTypeBatteryLevel GetMetricsParamsMetricType = "battery_level"
+	GetMetricsParamsMetricTypeHumidity     GetMetricsParamsMetricType = "humidity"
 	GetMetricsParamsMetricTypePh           GetMetricsParamsMetricType = "ph"
 	GetMetricsParamsMetricTypeSoilMoisture GetMetricsParamsMetricType = "soil_moisture"
 	GetMetricsParamsMetricTypeTemperature  GetMetricsParamsMetricType = "temperature"

@@ -1,19 +1,19 @@
 import { Outlet } from "react-router"
-//import AppDrawer from "./components/AppDrawer"
 import AppSideBar from "./components/AppSideBar"
 import AppNavBar from "./components/AppNavBar"
+import { SidebarInset } from "./components/ui/sidebar"
 
 function Layout() {
   return (
-    <div className="flex h-screen w-full">
+    <>
       <AppSideBar />
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <SidebarInset>
         <AppNavBar />
-        <div className="px-4 flex-1 overflow-auto;">
+        <div className="flex-1 overflow-auto p-4">
           <Outlet />
         </div>
-      </main>
-    </div>
+      </SidebarInset>
+    </>
   )
 }
 

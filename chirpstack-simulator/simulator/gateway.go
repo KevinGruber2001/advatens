@@ -2,6 +2,7 @@ package simulator
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
@@ -14,6 +15,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/brocaar/lorawan"
 	"github.com/chirpstack/chirpstack/api/go/v4/gw"
@@ -241,6 +243,58 @@ func (g *Gateway) SendUplinkFrame(pl gw.UplinkFrame) error {
 	gatewayUplinkCounter().Inc()
 
 	return nil
+}
+
+// SendStats publishes a gateway stats message.
+func (g *Gateway) SendStats() error {
+	stats := gw.GatewayStats{
+		GatewayId: g.gatewayID.String(),
+		Time:      timestamppb.Now(),
+	}
+
+	b, err := proto.Marshal(&stats)
+	if err != nil {
+		return errors.Wrap(err, "marshal gateway stats error")
+	}
+
+	statsTopic := g.getEventTopic("stats")
+
+	log.WithFields(log.Fields{
+		"gateway_id": g.gatewayID,
+		"topic":      statsTopic,
+	}).Debug("simulator: publish gateway stats")
+
+	if token := g.mqtt.Publish(statsTopic, 0, false, b); token.Wait() && token.Error() != nil {
+		return errors.Wrap(token.Error(), "simulator: publish gateway stats error")
+	}
+
+	return nil
+}
+
+// StartStatsLoop periodically sends gateway stats until the context is cancelled.
+func (g *Gateway) StartStatsLoop(ctx context.Context) {
+	// Send initial stats immediately.
+	if err := g.SendStats(); err != nil {
+		log.WithError(err).WithFields(log.Fields{
+			"gateway_id": g.gatewayID,
+		}).Error("simulator: send gateway stats error")
+	}
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := g.SendStats(); err != nil {
+				log.WithError(err).WithFields(log.Fields{
+					"gateway_id": g.gatewayID,
+				}).Error("simulator: send gateway stats error")
+			}
+		}
+	}
 }
 
 // sendDownlinkTxAck sends the given downlink Ack.

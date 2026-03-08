@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -160,13 +161,34 @@ func WithUplinkCount(count uint32) DeviceOption {
 func WithUplinkPayload(confirmed bool, fPort uint8, pl []byte) DeviceOption {
 	return func(d *Device) error {
 		d.fPort = fPort
-
-		cayenne := cayennelpp.NewEncoder()
-		cayenne.AddTemperature(1, 21.5)
-		d.payload = cayenne.Bytes()
+		d.payload = d.generatePayload()
 		d.confirmed = confirmed
 		return nil
 	}
+}
+
+// generatePayload creates a Cayenne LPP encoded payload with randomized
+// temperature, humidity, soil moisture, and battery level values.
+func (d *Device) generatePayload() []byte {
+	cayenne := cayennelpp.NewEncoder()
+
+	// Temperature: 15.0 - 35.0 °C
+	temp := 15.0 + rand.Float64()*20.0
+	cayenne.AddTemperature(1, temp)
+
+	// Relative Humidity: 30.0 - 90.0 %
+	humidity := 30.0 + rand.Float64()*60.0
+	cayenne.AddRelativeHumidity(2, humidity)
+
+	// Soil Moisture as Analog Input (ch3): 0.0 - 100.0 %
+	soilMoisture := rand.Float64() * 100.0
+	cayenne.AddAnalogInput(3, soilMoisture)
+
+	// Battery Level as Analog Input (ch4): 2.5 - 4.2 V
+	batteryLevel := 2.5 + rand.Float64()*1.7
+	cayenne.AddAnalogInput(4, batteryLevel)
+
+	return cayenne.Bytes()
 }
 
 // WithGateways adds the device to the given gateways.
@@ -346,6 +368,9 @@ func (d *Device) joinRequest() {
 
 // dataUp sends an data uplink.
 func (d *Device) dataUp() {
+	// Regenerate payload with fresh randomized sensor values for each uplink.
+	d.payload = d.generatePayload()
+
 	log.WithFields(log.Fields{
 		"dev_eui":   d.devEUI,
 		"dev_addr":  d.devAddr,
@@ -556,7 +581,7 @@ func (d *Device) getState() deviceState {
 // setState sets the device to the given state.
 func (d *Device) setState(s deviceState) {
 	d.Lock()
-	d.Unlock()
+	defer d.Unlock()
 
 	d.state = s
 }

@@ -174,6 +174,13 @@ func (s *simulation) runSimulation() error {
 	var gateways []*simulator.Gateway
 	var devices []*simulator.Device
 
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(s.ctx)
+	if s.duration != 0 {
+		ctx, cancel = context.WithTimeout(ctx, s.duration)
+	}
+	defer cancel()
+
 	for _, gatewayID := range s.gatewayIDs {
 		gw, err := simulator.NewGateway(
 			simulator.WithGatewayID(gatewayID),
@@ -185,14 +192,10 @@ func (s *simulation) runSimulation() error {
 			return errors.Wrap(err, "new gateway error")
 		}
 		gateways = append(gateways, gw)
-	}
 
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(s.ctx)
-	if s.duration != 0 {
-		ctx, cancel = context.WithTimeout(ctx, s.duration)
+		// Start periodic gateway stats reporting.
+		go gw.StartStatsLoop(ctx)
 	}
-	defer cancel()
 
 	for devEUI, appKey := range s.deviceAppKeys {
 		devGateways := make(map[int]*simulator.Gateway)
@@ -318,13 +321,14 @@ func (s *simulation) setupDeviceProfile() error {
 
 	resp, err := as.DeviceProfile().Create(context.Background(), &api.CreateDeviceProfileRequest{
 		DeviceProfile: &api.DeviceProfile{
-			Name:              dpName.String(),
-			TenantId:          s.tenant.GetId(),
-			MacVersion:        common.MacVersion_LORAWAN_1_0_3,
-			RegParamsRevision: common.RegParamsRevision_B,
-			SupportsOtaa:      true,
-			Region:            common.Region_EU868,
-			AdrAlgorithmId:    "default",
+			Name:                dpName.String(),
+			TenantId:            s.tenant.GetId(),
+			MacVersion:          common.MacVersion_LORAWAN_1_0_3,
+			RegParamsRevision:   common.RegParamsRevision_B,
+			SupportsOtaa:        true,
+			Region:              common.Region_EU868,
+			AdrAlgorithmId:      "default",
+			PayloadCodecRuntime: api.CodecRuntime_CAYENNE_LPP,
 		},
 	})
 	if err != nil {
