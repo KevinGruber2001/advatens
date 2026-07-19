@@ -14,12 +14,18 @@ type Querier interface {
 	CreateOrchard(ctx context.Context, arg CreateOrchardParams) (Orchard, error)
 	CreateStation(ctx context.Context, arg CreateStationParams) (Station, error)
 	DeleteOrchard(ctx context.Context, id uuid.UUID) error
-	DeleteStation(ctx context.Context, id uuid.UUID) error
+	GetMeasurementsHourly(ctx context.Context, arg GetMeasurementsHourlyParams) ([]GetMeasurementsHourlyRow, error)
 	GetOrchardById(ctx context.Context, id uuid.UUID) (Orchard, error)
+	GetStationByDeviceId(ctx context.Context, deviceID string) (Station, error)
 	GetStationById(ctx context.Context, id uuid.UUID) (Station, error)
+	HardDeleteStation(ctx context.Context, id uuid.UUID) error
+	InsertMeasurements(ctx context.Context, arg []InsertMeasurementsParams) *InsertMeasurementsBatchResults
 	ListOrchards(ctx context.Context, ownerID string) ([]Orchard, error)
-	ListOrchardsWithStations(ctx context.Context, ownerID string) ([]ListOrchardsWithStationsRow, error)
 	ListStationsByOrchard(ctx context.Context, orchardID uuid.UUID) ([]Station, error)
+	ListStationsByOrchards(ctx context.Context, orchardIds []uuid.UUID) ([]Station, error)
+	ListStationsForSync(ctx context.Context) ([]Station, error)
+	MarkStationDeletePending(ctx context.Context, id uuid.UUID) error
+	SetStationSyncStatus(ctx context.Context, arg SetStationSyncStatusParams) error
 	UpdateOrchard(ctx context.Context, arg UpdateOrchardParams) (Orchard, error)
 	UpdateStation(ctx context.Context, arg UpdateStationParams) (Station, error)
 }

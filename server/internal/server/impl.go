@@ -1,27 +1,34 @@
 package server
 
 import (
-	influxApi "github.com/influxdata/influxdb-client-go/v2/api"
+	"context"
+
 	"github.com/jackc/pgx/v5/pgxpool"
-	"server/config"
-	"server/internal/chirpstack"
 	db "server/internal/db/sqlc"
 )
 
-type Server struct {
-	queries    *db.Queries
-	db         *pgxpool.Pool
-	influx     influxApi.QueryAPI
-	chirpstack *chirpstack.Client
-	config     *config.EnvVars
+// UserIDKey is the gin context key under which the auth middleware stores the
+// authenticated user's ID.
+const UserIDKey = "userID"
+
+func userIDFromContext(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(UserIDKey).(string)
+	return id, ok && id != ""
 }
 
-func NewServer(dbPool *pgxpool.Pool, influxQueryApi influxApi.QueryAPI, chirpstackClient *chirpstack.Client, cfg *config.EnvVars) Server {
+// Nudger triggers an immediate reconcile pass after a station write.
+type Nudger interface {
+	Nudge()
+}
+
+type Server struct {
+	queries *db.Queries
+	sync    Nudger
+}
+
+func NewServer(dbPool *pgxpool.Pool, sync Nudger) Server {
 	return Server{
-		queries:    db.New(dbPool),
-		db:         dbPool,
-		influx:     influxQueryApi,
-		chirpstack: chirpstackClient,
-		config:     cfg,
+		queries: db.New(dbPool),
+		sync:    sync,
 	}
 }

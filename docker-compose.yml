@@ -1,20 +1,21 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database (shared by Advatens and ChirpStack)
+  # TimescaleDB / PostgreSQL (shared by Advatens and ChirpStack)
   postgres:
-    build:
-      context: .
-      dockerfile: Dockerfile.postgres
+    image: timescale/timescaledb:2.28.3-pg15
     restart: unless-stopped
+    env_file: .env
     environment:
       POSTGRES_DB: ${DB_DATABASE:-advatens}
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Loopback only: host-local dev access, never exposed to the internet.
+      # 5433 avoids colliding with a natively installed Postgres on 5432.
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Extension setup, only executed when the data volume is first created
+      - ./chirpstack/configuration/postgresql/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-advatens}"]
       interval: 10s
@@ -34,45 +35,30 @@ services:
 
   # Mosquitto MQTT Broker (for ChirpStack)
   mosquitto:
-    build:
-      context: .
-      dockerfile: Dockerfile.mosquitto
+    image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      # Loopback only: the broker allows anonymous access, so it must never be
+      # reachable from outside. Gateways talk to the bridges, not the broker.
+      - "127.0.0.1:1883:1883"
     volumes:
+      - ./chirpstack/configuration/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     networks:
       - advatens-network
 
-  # InfluxDB (for ChirpStack metrics)
-  influxdb:
-    image: influxdb:2
-    restart: unless-stopped
-    ports:
-      - "8086:8086"
-    environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER:-admin}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:-adminadmin}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-chirpstack}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-chirpstack}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
-    volumes:
-      - influxdb_data:/var/lib/influxdb2
-    networks:
-      - advatens-network
-
   # ChirpStack LoRaWAN Network Server
   chirpstack:
-    build:
-      context: .
-      dockerfile: Dockerfile.chirpstack
+    image: chirpstack/chirpstack:4
     restart: unless-stopped
+    command: -c /etc/chirpstack
     ports:
-      - "8080:8080"
+      # Loopback only: reach the ChirpStack UI on a server via an SSH tunnel
+      # (ssh -L 8080:localhost:8080 <host>).
+      - "127.0.0.1:8080:8080"
     environment:
+      CHIRPSTACK_API_SECRET: ${CHIRPSTACK_API_SECRET:-local-dev-secret-change-in-prod}
       POSTGRESQL_HOST: postgres
       POSTGRESQL_USER: ${DB_USERNAME:-postgres}
       POSTGRESQL_PASSWORD: ${DB_PASSWORD:-postgres}
@@ -80,6 +66,7 @@ services:
       REDIS_HOST: redis
       MQTT_BROKER_HOST: mosquitto
     volumes:
+      - ./chirpstack/configuration/chirpstack:/etc/chirpstack:ro
       - chirpstack_lorawan_frames:/opt/lorawan-frames
     depends_on:
       postgres:
@@ -93,12 +80,12 @@ services:
 
   # ChirpStack Gateway Bridge
   chirpstack-gateway-bridge:
-    build:
-      context: .
-      dockerfile: Dockerfile.gateway-bridge
+    image: chirpstack/chirpstack-gateway-bridge:4
     restart: unless-stopped
     ports:
       - "1700:1700/udp"
+    volumes:
+      - ./chirpstack/configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge:ro
     depends_on:
       - mosquitto
     networks:
@@ -106,13 +93,13 @@ services:
 
   # ChirpStack Gateway Bridge (Basic Station)
   chirpstack-gateway-bridge-basicstation:
-    build:
-      context: .
-      dockerfile: Dockerfile.gateway-bridge
+    image: chirpstack/chirpstack-gateway-bridge:4
     restart: unless-stopped
     command: -c /etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge-basicstation-eu868.toml
     ports:
       - "3002:3001"
+    volumes:
+      - ./chirpstack/configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge:ro
     depends_on:
       - mosquitto
     networks:
@@ -124,26 +111,10 @@ services:
     restart: unless-stopped
     command: --server chirpstack:8080 --bind 0.0.0.0:8090 --insecure
     ports:
-      - "8090:8090"
+      # Loopback only; nothing in the stack depends on the REST API.
+      - "127.0.0.1:8090:8090"
     depends_on:
       - chirpstack
-    networks:
-      - advatens-network
-
-  # Grafana (for ChirpStack metrics visualization)
-  grafana:
-    image: grafana/grafana:11.1.5
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./chirpstack/configuration/grafana/provisioning:/etc/grafana/provisioning
-    depends_on:
-      - influxdb
     networks:
       - advatens-network
 
@@ -155,35 +126,19 @@ services:
     restart: unless-stopped
     ports:
       - "8888:8888"
+    env_file: .env
     environment:
-      # Database
+      # Docker-internal hostnames (override .env local values)
       DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: ${DB_DATABASE:-advatens}
-      DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_SCHEMA: ${DB_SCHEMA:-public}
-
-      # InfluxDB
-      INFLUXDB_URL: http://influxdb:8086
-      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
-      INFLUXDB_ORG: ${INFLUXDB_ORG:-chirpstack}
-      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-chirpstack}
-
-      # Clerk
-      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
-
-      # ChirpStack
+      DB_PORT: "5432"
+      MQTT_BROKER_URL: tcp://mosquitto:1883
       CHIRPSTACK_API_URL: chirpstack:8080
-      CHIRPSTACK_API_TOKEN: ${CHIRPSTACK_API_TOKEN}
-      CHIRPSTACK_APPLICATION_ID: ${CHIRPSTACK_APPLICATION_ID}
-      CHIRPSTACK_DEVICE_PROFILE_ID: ${CHIRPSTACK_DEVICE_PROFILE_ID}
     depends_on:
       postgres:
         condition: service_healthy
       chirpstack:
         condition: service_started
-      influxdb:
+      mosquitto:
         condition: service_started
     networks:
       - advatens-network
@@ -209,9 +164,7 @@ volumes:
   redis_data:
   mosquitto_data:
   mosquitto_log:
-  influxdb_data:
   chirpstack_lorawan_frames:
-  grafana_data:
 
 networks:
   advatens-network:

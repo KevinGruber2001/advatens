@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // dist and generated files (API client, MSW service worker) are not linted
+  globalIgnores(['dist', 'public', 'generated.api.ts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -18,6 +19,11 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+    },
+    rules: {
+      // HMR ergonomics hint, not a correctness rule; shadcn/ui and context
+      // provider files export helpers alongside components by design.
+      'react-refresh/only-export-components': 'warn',
     },
   },
 ])

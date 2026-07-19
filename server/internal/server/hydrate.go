@@ -12,14 +12,6 @@ func OrchardToDomain(orchard db.Orchard) Orchard {
 	}
 }
 
-func OrchardToDb(orchard Orchard) db.Orchard {
-	return db.Orchard{
-		ID:      orchard.Id,
-		Name:    orchard.Name,
-		OwnerID: orchard.OwnerId,
-	}
-}
-
 func StationToDomain(station db.Station) Station {
 	return Station{
 		DeviceId:  station.DeviceID,

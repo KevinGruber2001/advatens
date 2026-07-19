@@ -9,7 +9,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createOrchard = `-- name: CreateOrchard :one
@@ -82,52 +81,6 @@ func (q *Queries) ListOrchards(ctx context.Context, ownerID string) ([]Orchard, 
 			&i.Name,
 			&i.CreatedAt,
 			&i.OwnerID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listOrchardsWithStations = `-- name: ListOrchardsWithStations :many
-SELECT orchard.id, orchard.name, orchard.created_at, orchard.owner_id, station.id, station.orchard_id, station.name, station.device_id, station.created_at FROM orchard
-LEFT JOIN station ON station.orchard_id = orchard.id
-WHERE owner_id = $1
-ORDER BY orchard.id
-`
-
-type ListOrchardsWithStationsRow struct {
-	Orchard   Orchard          `json:"orchard"`
-	ID        pgtype.UUID      `json:"id"`
-	OrchardID pgtype.UUID      `json:"orchard_id"`
-	Name      *string          `json:"name"`
-	DeviceID  *string          `json:"device_id"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
-}
-
-func (q *Queries) ListOrchardsWithStations(ctx context.Context, ownerID string) ([]ListOrchardsWithStationsRow, error) {
-	rows, err := q.db.Query(ctx, listOrchardsWithStations, ownerID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListOrchardsWithStationsRow
-	for rows.Next() {
-		var i ListOrchardsWithStationsRow
-		if err := rows.Scan(
-			&i.Orchard.ID,
-			&i.Orchard.Name,
-			&i.Orchard.CreatedAt,
-			&i.Orchard.OwnerID,
-			&i.ID,
-			&i.OrchardID,
-			&i.Name,
-			&i.DeviceID,
-			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

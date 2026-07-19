@@ -14,7 +14,7 @@ import (
 const createStation = `-- name: CreateStation :one
 INSERT INTO station (name, device_id, orchard_id)
 VALUES ($1, $2, $3)
-    RETURNING id, orchard_id, name, device_id, created_at
+    RETURNING id, orchard_id, name, device_id, created_at, sync_status
 `
 
 type CreateStationParams struct {
@@ -32,23 +32,35 @@ func (q *Queries) CreateStation(ctx context.Context, arg CreateStationParams) (S
 		&i.Name,
 		&i.DeviceID,
 		&i.CreatedAt,
+		&i.SyncStatus,
 	)
 	return i, err
 }
 
-const deleteStation = `-- name: DeleteStation :exec
-DELETE FROM station
-WHERE id = $1
+const getStationByDeviceId = `-- name: GetStationByDeviceId :one
+SELECT id, orchard_id, name, device_id, created_at, sync_status FROM station
+WHERE device_id = $1
+  AND sync_status != 'delete_pending'
 `
 
-func (q *Queries) DeleteStation(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteStation, id)
-	return err
+func (q *Queries) GetStationByDeviceId(ctx context.Context, deviceID string) (Station, error) {
+	row := q.db.QueryRow(ctx, getStationByDeviceId, deviceID)
+	var i Station
+	err := row.Scan(
+		&i.ID,
+		&i.OrchardID,
+		&i.Name,
+		&i.DeviceID,
+		&i.CreatedAt,
+		&i.SyncStatus,
+	)
+	return i, err
 }
 
 const getStationById = `-- name: GetStationById :one
-SELECT id, orchard_id, name, device_id, created_at FROM station
+SELECT id, orchard_id, name, device_id, created_at, sync_status FROM station
 WHERE id = $1
+  AND sync_status != 'delete_pending'
 `
 
 func (q *Queries) GetStationById(ctx context.Context, id uuid.UUID) (Station, error) {
@@ -60,13 +72,25 @@ func (q *Queries) GetStationById(ctx context.Context, id uuid.UUID) (Station, er
 		&i.Name,
 		&i.DeviceID,
 		&i.CreatedAt,
+		&i.SyncStatus,
 	)
 	return i, err
 }
 
+const hardDeleteStation = `-- name: HardDeleteStation :exec
+DELETE FROM station
+WHERE id = $1
+`
+
+func (q *Queries) HardDeleteStation(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, hardDeleteStation, id)
+	return err
+}
+
 const listStationsByOrchard = `-- name: ListStationsByOrchard :many
-SELECT id, orchard_id, name, device_id, created_at FROM station
+SELECT id, orchard_id, name, device_id, created_at, sync_status FROM station
 WHERE orchard_id = $1
+  AND sync_status != 'delete_pending'
 ORDER BY created_at DESC
 `
 
@@ -85,6 +109,7 @@ func (q *Queries) ListStationsByOrchard(ctx context.Context, orchardID uuid.UUID
 			&i.Name,
 			&i.DeviceID,
 			&i.CreatedAt,
+			&i.SyncStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -96,11 +121,105 @@ func (q *Queries) ListStationsByOrchard(ctx context.Context, orchardID uuid.UUID
 	return items, nil
 }
 
+const listStationsByOrchards = `-- name: ListStationsByOrchards :many
+SELECT id, orchard_id, name, device_id, created_at, sync_status FROM station
+WHERE orchard_id = ANY($1::uuid[])
+  AND sync_status != 'delete_pending'
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListStationsByOrchards(ctx context.Context, orchardIds []uuid.UUID) ([]Station, error) {
+	rows, err := q.db.Query(ctx, listStationsByOrchards, orchardIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Station
+	for rows.Next() {
+		var i Station
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrchardID,
+			&i.Name,
+			&i.DeviceID,
+			&i.CreatedAt,
+			&i.SyncStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStationsForSync = `-- name: ListStationsForSync :many
+SELECT id, orchard_id, name, device_id, created_at, sync_status FROM station
+`
+
+func (q *Queries) ListStationsForSync(ctx context.Context) ([]Station, error) {
+	rows, err := q.db.Query(ctx, listStationsForSync)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Station
+	for rows.Next() {
+		var i Station
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrchardID,
+			&i.Name,
+			&i.DeviceID,
+			&i.CreatedAt,
+			&i.SyncStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markStationDeletePending = `-- name: MarkStationDeletePending :exec
+UPDATE station
+SET sync_status = 'delete_pending'
+WHERE id = $1
+`
+
+func (q *Queries) MarkStationDeletePending(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markStationDeletePending, id)
+	return err
+}
+
+const setStationSyncStatus = `-- name: SetStationSyncStatus :exec
+UPDATE station
+SET sync_status = $2
+WHERE id = $1
+`
+
+type SetStationSyncStatusParams struct {
+	ID         uuid.UUID         `json:"id"`
+	SyncStatus StationSyncStatus `json:"sync_status"`
+}
+
+func (q *Queries) SetStationSyncStatus(ctx context.Context, arg SetStationSyncStatusParams) error {
+	_, err := q.db.Exec(ctx, setStationSyncStatus, arg.ID, arg.SyncStatus)
+	return err
+}
+
 const updateStation = `-- name: UpdateStation :one
 UPDATE station
-SET name = coalesce($2, name)
+SET name = coalesce($2, name),
+    sync_status = 'pending'
 WHERE id = $1
-    RETURNING id, orchard_id, name, device_id, created_at
+  AND sync_status != 'delete_pending'
+    RETURNING id, orchard_id, name, device_id, created_at, sync_status
 `
 
 type UpdateStationParams struct {
@@ -117,6 +236,7 @@ func (q *Queries) UpdateStation(ctx context.Context, arg UpdateStationParams) (S
 		&i.Name,
 		&i.DeviceID,
 		&i.CreatedAt,
+		&i.SyncStatus,
 	)
 	return i, err
 }

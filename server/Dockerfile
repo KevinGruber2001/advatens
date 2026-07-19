@@ -3,31 +3,27 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
 
-# Build the application
+# Migrations are embedded into the binary via go:embed
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./cmd/api
 
 # Runtime stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates && adduser -D -u 10001 app
 
-WORKDIR /root/
+WORKDIR /app
 
-# Copy the binary from builder
 COPY --from=builder /app/server .
 
-# Copy migrations
-COPY --from=builder /app/internal/db/migrations ./internal/db/migrations
+USER app
 
-# Expose port
+ENV GIN_MODE=release
+
 EXPOSE 8888
 
-# Run the application
 CMD ["./server"]

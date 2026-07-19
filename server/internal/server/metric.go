@@ -4,103 +4,51 @@ import (
 	"context"
 	"log"
 	"time"
-)
 
-const metricsQuery = `
-from(bucket: "chirpstack")
-	|> range(start: duration(v: params.startTime), stop: duration(v: params.endTime))
-	|> filter(fn: (r) => r["_measurement"] == params.measurement)
-	|> filter(fn: (r) => r["_field"] == "value")
-	|> filter(fn: (r) => r["dev_eui"] == params.devEUI)
-	|> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
-	|> yield(name: "mean")
-`
+	"github.com/jackc/pgx/v5/pgtype"
+
+	db "server/internal/db/sqlc"
+)
 
 func (s Server) GetMetrics(ctx context.Context, request GetMetricsRequestObject) (GetMetricsResponseObject, error) {
 	stationId := request.Params.StationId
 	metricType := request.Params.MetricType
 
-	st, err := s.queries.GetStationById(ctx, stationId)
-	if err != nil {
-		log.Printf("Error getting station by id %s: %s", stationId, err)
-		return nil, err
-	}
+	endTime := time.Now()
+	startTime := endTime.Add(-30 * 24 * time.Hour)
 
-	startTime := "-30d"
 	if request.Params.StartTime != nil {
-		startTime = *request.Params.StartTime
+		if t, err := time.Parse(time.RFC3339, *request.Params.StartTime); err == nil {
+			startTime = t
+		}
 	}
 
-	endTime := "now()"
 	if request.Params.EndTime != nil {
-		endTime = *request.Params.EndTime
+		if t, err := time.Parse(time.RFC3339, *request.Params.EndTime); err == nil {
+			endTime = t
+		}
 	}
 
-	params := map[string]string{
-		"startTime":   startTime,
-		"endTime":     endTime,
-		"measurement": getInfluxMeasurement(metricType),
-		"devEUI":      st.DeviceID,
-	}
-
-	results, err := s.influx.QueryWithParams(ctx, metricsQuery, params)
+	rows, err := s.queries.GetMeasurementsHourly(ctx, db.GetMeasurementsHourlyParams{
+		StationID:  stationId,
+		MetricType: db.MetricType(metricType),
+		StartTime:  pgtype.Timestamptz{Time: startTime, Valid: true},
+		EndTime:    pgtype.Timestamptz{Time: endTime, Valid: true},
+	})
 	if err != nil {
 		log.Printf("Error getting metrics: %s", err)
 		return nil, err
 	}
 
-	metrics := make([]Metric, 0)
-
-	// Parse results
-	for results.Next() {
-		record := results.Record()
+	metrics := make([]Metric, 0, len(rows))
+	for _, row := range rows {
 		metrics = append(metrics, Metric{
-			MetricType: convertMetricType(metricType),
-			StationId:  st.ID,
-			Timestamp:  record.Time().Format(time.RFC3339),
-			Value:      float32(record.Value().(float64)),
+			MetricType: MetricMetricType(row.MetricType),
+			StationId:  row.StationID,
+			Timestamp:  row.Time.Time.Format(time.RFC3339),
+			Value:      float32(row.Value),
 		})
 	}
 
-	if results.Err() != nil {
-		log.Printf("Error getting metrics: %s", results.Err())
-		return nil, results.Err()
-	}
-
 	return GetMetrics200JSONResponse(metrics), nil
-}
-
-// Helper function to map metric types to InfluxDB measurements
-func getInfluxMeasurement(metricType GetMetricsParamsMetricType) string {
-	switch metricType {
-	case GetMetricsParamsMetricTypeTemperature:
-		return "device_frmpayload_data_temperatureSensor_1"
-	case GetMetricsParamsMetricTypeSoilMoisture:
-		return "device_frmpayload_data_analogInput_3"
-	case GetMetricsParamsMetricTypeHumidity:
-		return "device_frmpayload_data_relativeHumidity_2"
-	case GetMetricsParamsMetricTypePh:
-		return "device_frmpayload_data_ph"
-	case GetMetricsParamsMetricTypeBatteryLevel:
-		return "device_frmpayload_data_analogInput_4"
-	default:
-		return ""
-	}
-}
-
-func convertMetricType(mt GetMetricsParamsMetricType) MetricMetricType {
-	switch mt {
-	case GetMetricsParamsMetricTypeTemperature:
-		return MetricMetricTypeTemperature
-	case GetMetricsParamsMetricTypeSoilMoisture:
-		return MetricMetricTypeSoilMoisture
-	case GetMetricsParamsMetricTypeHumidity:
-		return MetricMetricTypeHumidity
-	case GetMetricsParamsMetricTypePh:
-		return MetricMetricTypePh
-	case GetMetricsParamsMetricTypeBatteryLevel:
-		return MetricMetricTypeBatteryLevel
-	default:
-		return MetricMetricType("")
-	}
 }

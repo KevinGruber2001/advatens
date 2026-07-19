@@ -8,8 +8,12 @@ import (
 	"os/signal"
 	conf "server/config"
 	"server/internal/chirpstack"
+	db "server/internal/db/sqlc"
 	"server/internal/migrate"
+	mqttSub "server/internal/mqtt"
+	"server/internal/reconciler"
 	"server/internal/server"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,11 +21,10 @@ import (
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func gracefulShutdown(apiServer *http.Server, done chan bool) {
+func gracefulShutdown(apiServer *http.Server, mqttSubscriber *mqttSub.Subscriber, stopReconciler context.CancelFunc, done chan bool) {
 	// Create context that listens for the interrupt signal from the OS.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -31,6 +34,12 @@ func gracefulShutdown(apiServer *http.Server, done chan bool) {
 
 	log.Println("shutting down gracefully, press Ctrl+C again to force")
 	stop() // Allow Ctrl+C to force shutdown
+
+	// Stop background workers
+	stopReconciler()
+	if mqttSubscriber != nil {
+		mqttSubscriber.Stop()
+	}
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling
@@ -85,25 +94,53 @@ func main() {
 	err = migrate.Migrate(pool)
 
 	if err != nil {
-		log.Print("Failed to migrate database")
+		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
-	// Setup Influx
+	// Setup ChirpStack
 
-	token := env.INFLUXDB_TOKEN
-	url := env.INFLUXDB_URL
-	influxClient := influxdb2.NewClient(url, token)
-	defer influxClient.Close()
-	queryApi := influxClient.QueryAPI(env.INFLUXDB_ORG)
-
-	// Setup Chirpstack
-
-	chirpStackClient, err := chirpstack.NewClient(env.CHIRPSTACK_API_URL, env.CHIRPSTACK_API_TOKEN)
-
+	chirpStackClient, err := chirpstack.NewClient(chirpstack.ClientConfig{
+		ServerAddr:    env.CHIRPSTACK_API_URL,
+		APIToken:      env.CHIRPSTACK_API_TOKEN,
+		AdminEmail:    env.CHIRPSTACK_ADMIN_EMAIL,
+		AdminPassword: env.CHIRPSTACK_ADMIN_PASSWORD,
+	})
 	if err != nil {
 		log.Fatalf("Error creating chirpstack client: %v", err)
 	}
-	serverImpl := server.NewServer(pool, queryApi, chirpStackClient, &env)
+
+	// The MQTT topic and the reconciler both depend on the bootstrapped
+	// application ID, so a failed bootstrap means a dead pipeline — fail fast
+	// and let the container restart policy retry until ChirpStack is up.
+	if err := chirpStackClient.EnsureInfrastructure(ctx); err != nil {
+		log.Fatalf("ChirpStack bootstrap failed: %v", err)
+	}
+
+	// Setup MQTT Subscriber
+
+	var mqttSubscriber *mqttSub.Subscriber
+	if env.MQTT_BROKER_URL != "" {
+		mqttSubscriber = mqttSub.NewSubscriber(mqttSub.Config{
+			BrokerURL:     env.MQTT_BROKER_URL,
+			ClientID:      "advatens-server",
+			ApplicationID: chirpStackClient.ApplicationID(),
+		}, pool)
+		if err := mqttSubscriber.Start(); err != nil {
+			log.Printf("Warning: MQTT subscriber start failed: %v", err)
+		}
+	} else {
+		log.Println("Warning: MQTT_BROKER_URL not set, MQTT subscriber disabled")
+	}
+
+	// Setup Reconciler (keeps ChirpStack in sync with the station table)
+
+	rec := reconciler.New(db.New(pool), chirpStackClient, 30*time.Second)
+
+	reconcilerCtx, stopReconciler := context.WithCancel(ctx)
+	defer stopReconciler()
+	go rec.Run(reconcilerCtx)
+
+	serverImpl := server.NewServer(pool, rec)
 
 	if env.CLERK_SECRET_KEY == "" {
 		log.Fatal("CLERK_SECRET_KEY environment variable is required")
@@ -118,7 +155,7 @@ func main() {
 	r.Use(cors.New(cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
-		AllowAllOrigins:  true,
+		AllowOrigins:     corsOrigins(env.CORS_ALLOWED_ORIGINS),
 		AllowCredentials: true,
 	}))
 
@@ -131,7 +168,7 @@ func main() {
 	done := make(chan bool, 1)
 
 	// Run graceful shutdown in a separate goroutine
-	go gracefulShutdown(httpServer, done)
+	go gracefulShutdown(httpServer, mqttSubscriber, stopReconciler, done)
 
 	// Start the server
 	log.Println("Starting server on :8888")
@@ -145,49 +182,39 @@ func main() {
 	log.Println("Graceful shutdown complete.")
 }
 
+// corsOrigins parses the comma-separated CORS_ALLOWED_ORIGINS value, falling
+// back to common local dev origins when unset.
+func corsOrigins(configured string) []string {
+	if configured == "" {
+		return []string{"http://localhost:3000", "http://localhost:5173"}
+	}
+	var origins []string
+	for _, origin := range strings.Split(configured, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
+}
+
+// ClerkAuthMiddleware validates the Clerk session token (via the SDK's
+// JWKS-caching middleware) and stores the user ID on the gin context.
 func ClerkAuthMiddleware() gin.HandlerFunc {
+	requireAuth := clerkhttp.RequireHeaderAuthorization()
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		log.Printf("Authorization header: %s", authHeader)
-
-		writer := &responseCaptureWriter{ResponseWriter: c.Writer, statusCode: 200}
-
-		handler := clerkhttp.RequireHeaderAuthorization()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Extract claims from Clerk session (if possible)
-			claims, ok := clerk.SessionClaimsFromContext(r.Context())
-			if !ok {
-				log.Println("No claims found in middleware")
-				// Optionally abort here or continue depending on your auth flow
-			} else {
-				// Add user ID to Gin context
-				c.Set("userID", claims.Subject)
-
-				// Also add to request context if you want
-				ctx := context.WithValue(r.Context(), "userID", claims.Subject)
-				r = r.WithContext(ctx)
+		authorized := false
+		requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authorized = true
+			if claims, ok := clerk.SessionClaimsFromContext(r.Context()); ok {
+				c.Set(server.UserIDKey, claims.Subject)
 			}
+		})).ServeHTTP(c.Writer, c.Request)
 
-			c.Request = r
-		}))
-
-		handler.ServeHTTP(writer, c.Request)
-
-		if writer.statusCode == http.StatusUnauthorized || writer.statusCode == http.StatusForbidden {
+		if !authorized {
+			// RequireHeaderAuthorization already wrote the 401/403 response.
 			c.Abort()
 			return
 		}
-
 		c.Next()
 	}
-}
-
-// Helper to capture status code from ResponseWriter
-type responseCaptureWriter struct {
-	gin.ResponseWriter
-	statusCode int
-}
-
-func (w *responseCaptureWriter) WriteHeader(code int) {
-	w.statusCode = code
-	w.ResponseWriter.WriteHeader(code)
 }

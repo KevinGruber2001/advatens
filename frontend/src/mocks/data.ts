@@ -6,12 +6,12 @@ const STATION_IDS = {
   alpine3: "a1b2c3d4-1111-4000-a000-000000000003",
   valley1: "a1b2c3d4-2222-4000-a000-000000000001",
   valley2: "a1b2c3d4-2222-4000-a000-000000000002",
-} as const
+}
 
 const ORCHARD_IDS = {
   alpine: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   valley: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-} as const
+}
 
 export const mockStations = {
   alpine: [
