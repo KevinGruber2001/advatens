@@ -52,3 +52,27 @@ jobs:
         run: npm run build
         env:
           VITE_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+
+  station:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: station
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Cache RUI3 toolchain and libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: rui3-${{ runner.os }}-v1
+
+      - name: Install RUI3 board package and libraries
+        run: make setup
+
+      - name: Compile firmware
+        run: make firmware
