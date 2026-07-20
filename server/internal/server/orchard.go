@@ -4,45 +4,49 @@ import (
 	"context"
 	"fmt"
 	"log"
+
+	"github.com/google/uuid"
+
 	db "server/internal/db/sqlc"
 )
 
 func (s Server) GetOrchards(ctx context.Context, request GetOrchardsRequestObject) (GetOrchardsResponseObject, error) {
 
-	userIdVal := ctx.Value("userID")
-
-	if userIdVal == nil {
-		log.Printf("Unauthorized: No user ID in context")
+	userId, ok := userIDFromContext(ctx)
+	if !ok {
 		return GetOrchards401JSONResponse{}, nil
 	}
 
-	userId := userIdVal.(string)
-
-	data, err := s.queries.ListOrchards(ctx, userId)
-
+	orchards, err := s.queries.ListOrchards(ctx, userId)
 	if err != nil {
 		log.Printf("Error listing orchards for user %s: %v", userId, err)
 		return nil, err
 	}
 
-	domainOrchards := make([]Orchard, len(data))
+	orchardIds := make([]uuid.UUID, len(orchards))
+	for i, orchard := range orchards {
+		orchardIds[i] = orchard.ID
+	}
 
-	for i, orchard := range data {
+	stations, err := s.queries.ListStationsByOrchards(ctx, orchardIds)
+	if err != nil {
+		log.Printf("Error listing stations for user %s: %v", userId, err)
+		return nil, err
+	}
 
-		stations, err := s.queries.ListStationsByOrchard(ctx, orchard.ID)
-		if err != nil {
-			log.Printf("Error listing stations for orchard %s: %v", orchard.ID, err)
-			return nil, err
-		}
+	stationsByOrchard := make(map[uuid.UUID][]Station)
+	for _, station := range stations {
+		stationsByOrchard[station.OrchardID] = append(stationsByOrchard[station.OrchardID], StationToDomain(station))
+	}
 
+	domainOrchards := make([]Orchard, len(orchards))
+	for i, orchard := range orchards {
 		domainOrchards[i] = OrchardToDomain(orchard)
-
-		stationsArray := new([]Station)
-		*stationsArray = make([]Station, len(stations))
-		for j, station := range stations {
-			(*stationsArray)[j] = StationToDomain(station)
+		orchardStations := stationsByOrchard[orchard.ID]
+		if orchardStations == nil {
+			orchardStations = []Station{}
 		}
-		domainOrchards[i].Stations = stationsArray
+		domainOrchards[i].Stations = &orchardStations
 	}
 
 	return GetOrchards200JSONResponse(domainOrchards), nil
@@ -61,14 +65,10 @@ func (s Server) GetOrchard(ctx context.Context, request GetOrchardRequestObject)
 
 func (s Server) CreateOrchard(ctx context.Context, request CreateOrchardRequestObject) (CreateOrchardResponseObject, error) {
 
-	userIdVal := ctx.Value("userID")
-
-	if userIdVal == nil {
-		log.Printf("Unauthorized: No user ID in context")
+	userId, ok := userIDFromContext(ctx)
+	if !ok {
 		return CreateOrchard401JSONResponse{}, nil
 	}
-
-	userId := userIdVal.(string)
 
 	// Validate input
 	if len(request.Body.Name) < 2 || len(request.Body.Name) > 32 {

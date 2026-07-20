@@ -65,6 +65,7 @@ const Metric = z
     metric_type: z.enum([
       "temperature",
       "soil_moisture",
+      "humidity",
       "ph",
       "battery_level",
     ]),
@@ -95,7 +96,13 @@ const endpoints = makeApi([
       {
         name: "metric_type",
         type: "Query",
-        schema: z.enum(["temperature", "soil_moisture", "ph", "battery_level"]),
+        schema: z.enum([
+          "temperature",
+          "soil_moisture",
+          "humidity",
+          "ph",
+          "battery_level",
+        ]),
       },
       {
         name: "station_id",
@@ -399,7 +406,7 @@ const endpoints = makeApi([
   },
 ]);
 
-export const api = new Zodios("http://localhost:8888", endpoints);
+export const api = new Zodios(endpoints);
 
 export function createApiClient(baseUrl: string, options?: ZodiosOptions) {
   return new Zodios(baseUrl, endpoints, options);

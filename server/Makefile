@@ -12,23 +12,13 @@ build:
 # Run the application
 run:
 	@go run cmd/api/main.go
-# Create DB container
+# Start the shared infrastructure (postgres, redis, mosquitto, chirpstack) from the root compose file
 docker-run:
-	@if docker compose up --build 2>/dev/null; then \
-		: ; \
-	else \
-		echo "Falling back to Docker Compose V1"; \
-		docker-compose up --build; \
-	fi
+	@docker compose -f ../docker-compose.yml up -d postgres redis mosquitto chirpstack
 
-# Shutdown DB container
+# Shutdown the shared infrastructure
 docker-down:
-	@if docker compose down 2>/dev/null; then \
-		: ; \
-	else \
-		echo "Falling back to Docker Compose V1"; \
-		docker-compose down; \
-	fi
+	@docker compose -f ../docker-compose.yml down
 
 # Test the application
 test:

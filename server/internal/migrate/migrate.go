@@ -1,21 +1,26 @@
 package migrate
 
 import (
+	"log"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	migrate "github.com/rubenv/sql-migrate"
-	"log"
+
+	"server/internal/db"
 )
 
-func Migrate(db *pgxpool.Pool) error {
-	migrations := migrate.FileMigrationSource{
-		Dir: "internal/db/migrations",
+func Migrate(pool *pgxpool.Pool) error {
+	migrations := migrate.EmbedFileSystemMigrationSource{
+		FileSystem: db.Migrations,
+		Root:       "migrations",
 	}
-	sqlDB := stdlib.OpenDB(*db.Config().ConnConfig)
+	sqlDB := stdlib.OpenDB(*pool.Config().ConnConfig)
+	defer sqlDB.Close()
 	n, err := migrate.Exec(sqlDB, "postgres", migrations, migrate.Up)
 	if err != nil {
 		return err
 	}
-	log.Print("Applied %d migrations!\n", n)
+	log.Printf("Applied %d migrations!", n)
 	return nil
 }

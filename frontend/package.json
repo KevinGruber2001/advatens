@@ -9,7 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "prebuild": "openapi-zod-client ../openapi.yml -o generated.api.ts --export-schemas=true --export-types=true --base-url=http://localhost:8888 --strict-objects"
+    "prebuild": "openapi-zod-client ../openapi.yml -o generated.api.ts --export-schemas=true --export-types=true --strict-objects"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.50.0",

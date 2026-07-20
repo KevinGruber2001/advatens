@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pgrep -f chirpstack-simulator)"
+      "Bash(pgrep -f chirpstack-simulator)",
+      "Bash(grep -E \"bool|void|uint\" ~/Documents/Arduino/libraries/RAK12035_SoilMoisture/RAK12035_SoilMoisture.h | grep -v \"^\\\\s*//\" | head -30; echo ---; find ~/Library/Arduino15/packages/rak_rui -maxdepth 6 -type d 2>/dev/null | head -15)"
     ]
   }
 }

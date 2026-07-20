@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (includes API client codegen + typecheck)
+        run: npm run build
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+
+  station:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: station
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Cache RUI3 toolchain and libraries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: rui3-${{ runner.os }}-v1
+
+      - name: Install RUI3 board package and libraries
+        run: make setup
+
+      - name: Compile firmware
+        run: make firmware

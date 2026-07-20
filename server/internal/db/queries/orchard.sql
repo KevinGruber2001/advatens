@@ -12,12 +12,6 @@ SELECT * FROM orchard
          WHERE owner_id = $1
 ORDER BY created_at DESC;
 
--- name: ListOrchardsWithStations :many
-SELECT sqlc.embed(orchard), station.* FROM orchard
-LEFT JOIN station ON station.orchard_id = orchard.id
-WHERE owner_id = $1
-ORDER BY orchard.id;
-
 -- name: UpdateOrchard :one
 UPDATE orchard
 SET name = coalesce(sqlc.narg('name'), name)

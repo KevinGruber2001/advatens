@@ -5,9 +5,117 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type MetricType string
+
+const (
+	MetricTypeTemperature  MetricType = "temperature"
+	MetricTypeSoilMoisture MetricType = "soil_moisture"
+	MetricTypeHumidity     MetricType = "humidity"
+	MetricTypePh           MetricType = "ph"
+	MetricTypeBatteryLevel MetricType = "battery_level"
+)
+
+func (e *MetricType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MetricType(s)
+	case string:
+		*e = MetricType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MetricType: %T", src)
+	}
+	return nil
+}
+
+type NullMetricType struct {
+	MetricType MetricType `json:"metric_type"`
+	Valid      bool       `json:"valid"` // Valid is true if MetricType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMetricType) Scan(value interface{}) error {
+	if value == nil {
+		ns.MetricType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MetricType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMetricType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MetricType), nil
+}
+
+type StationSyncStatus string
+
+const (
+	StationSyncStatusPending       StationSyncStatus = "pending"
+	StationSyncStatusSynced        StationSyncStatus = "synced"
+	StationSyncStatusDeletePending StationSyncStatus = "delete_pending"
+)
+
+func (e *StationSyncStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StationSyncStatus(s)
+	case string:
+		*e = StationSyncStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StationSyncStatus: %T", src)
+	}
+	return nil
+}
+
+type NullStationSyncStatus struct {
+	StationSyncStatus StationSyncStatus `json:"station_sync_status"`
+	Valid             bool              `json:"valid"` // Valid is true if StationSyncStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullStationSyncStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.StationSyncStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.StationSyncStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullStationSyncStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.StationSyncStatus), nil
+}
+
+type Measurement struct {
+	Time       pgtype.Timestamptz `json:"time"`
+	StationID  uuid.UUID          `json:"station_id"`
+	MetricType MetricType         `json:"metric_type"`
+	Value      float64            `json:"value"`
+}
+
+type MeasurementHourly struct {
+	Bucket      interface{} `json:"bucket"`
+	StationID   uuid.UUID   `json:"station_id"`
+	MetricType  MetricType  `json:"metric_type"`
+	AvgValue    float64     `json:"avg_value"`
+	MinValue    interface{} `json:"min_value"`
+	MaxValue    interface{} `json:"max_value"`
+	SampleCount int64       `json:"sample_count"`
+}
 
 type Orchard struct {
 	ID        uuid.UUID        `json:"id"`
@@ -17,9 +125,10 @@ type Orchard struct {
 }
 
 type Station struct {
-	ID        uuid.UUID        `json:"id"`
-	OrchardID uuid.UUID        `json:"orchard_id"`
-	Name      string           `json:"name"`
-	DeviceID  string           `json:"device_id"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
+	ID         uuid.UUID         `json:"id"`
+	OrchardID  uuid.UUID         `json:"orchard_id"`
+	Name       string            `json:"name"`
+	DeviceID   string            `json:"device_id"`
+	CreatedAt  pgtype.Timestamp  `json:"created_at"`
+	SyncStatus StationSyncStatus `json:"sync_status"`
 }

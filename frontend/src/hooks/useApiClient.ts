@@ -8,6 +8,10 @@ import { createApiClient } from "../../generated.api"
 const IS_MOCK = import.meta.env.VITE_MOCK === "true"
 
 export function useAxiosWithAuth() {
+  // IS_MOCK is a build-time constant, so the hook call order is stable for
+  // the lifetime of the app. Calling both unconditionally is not an option:
+  // useAuth() throws without a ClerkProvider, which mock mode doesn't render.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const { getToken } = IS_MOCK ? useMockAuth() : useAuth()
 
   return React.useMemo(() => {

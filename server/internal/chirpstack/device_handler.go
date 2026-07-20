@@ -6,11 +6,9 @@ import (
 )
 
 type CreateDeviceRequest struct {
-	DevEUI          string // Device EUI (unique identifier)
-	Name            string
-	Description     string
-	ApplicationID   string // ChirpStack application ID
-	DeviceProfileID string // ChirpStack device profile ID
+	DevEUI      string // Device EUI (unique identifier)
+	Name        string
+	Description string
 }
 
 func (c *Client) CreateDevice(ctx context.Context, req CreateDeviceRequest) (*api.Device, error) {
@@ -20,8 +18,8 @@ func (c *Client) CreateDevice(ctx context.Context, req CreateDeviceRequest) (*ap
 		DevEui:          req.DevEUI,
 		Name:            req.Name,
 		Description:     req.Description,
-		ApplicationId:   req.ApplicationID,
-		DeviceProfileId: req.DeviceProfileID,
+		ApplicationId:   c.applicationID,
+		DeviceProfileId: c.deviceProfileID,
 		IsDisabled:      false,
 		SkipFcntCheck:   false,
 	}
@@ -73,4 +71,30 @@ func (c *Client) UpdateDevice(ctx context.Context, device *api.Device) error {
 
 	_, err := c.deviceClient.Update(ctx, req)
 	return err
+}
+
+// ListDevices returns all devices in the bootstrapped application.
+func (c *Client) ListDevices(ctx context.Context) ([]*api.DeviceListItem, error) {
+	ctx = c.withAuth(ctx)
+
+	var devices []*api.DeviceListItem
+	var offset uint32
+	const pageSize = 100
+
+	for {
+		resp, err := c.deviceClient.List(ctx, &api.ListDevicesRequest{
+			ApplicationId: c.applicationID,
+			Limit:         pageSize,
+			Offset:        offset,
+		})
+		if err != nil {
+			return nil, err
+		}
+		devices = append(devices, resp.Result...)
+
+		offset += uint32(len(resp.Result))
+		if len(resp.Result) == 0 || offset >= resp.TotalCount {
+			return devices, nil
+		}
+	}
 }
