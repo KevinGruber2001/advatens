@@ -9,19 +9,61 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "server/internal/db/sqlc"
 )
 
-// metricMapping maps keys of the ChirpStack-decoded Cayenne LPP object
-// (flat "<sensorType>_<channel>" keys in v4 JSON events) to metric types.
-var metricMapping = map[string]db.MetricType{
-	"temperatureSensor_1": db.MetricTypeTemperature,
-	"relativeHumidity_2":  db.MetricTypeHumidity,
-	"analogInput_3":       db.MetricTypeSoilMoisture,
-	"analogInput_4":       db.MetricTypeBatteryLevel,
+// metricSource locates a value in ChirpStack's decoded Cayenne LPP object,
+// which nests by sensor type then channel number, e.g.
+// {"analogInput": {"4": 3.93}} — confirmed against a real device payload,
+// not the flat "analogInput_4" shape the v4 docs' examples suggest.
+type metricSource struct {
+	sensorType string
+	channel    string
+	metricType db.MetricType
+}
+
+var metricMapping = []metricSource{
+	{"temperatureSensor", "1", db.MetricTypeTemperature},
+	{"relativeHumidity", "2", db.MetricTypeHumidity},
+	{"analogInput", "3", db.MetricTypeSoilMoisture},
+	{"analogInput", "4", db.MetricTypeBatteryLevel},
+}
+
+// extractMeasurements pulls known metrics out of a decoded Cayenne LPP
+// object, per metricMapping. Pure function so the real nested payload shape
+// (confirmed against an actual device, see metricMapping's comment) can be
+// covered by a table-driven test without a live DB.
+func extractMeasurements(object map[string]any, stationID uuid.UUID, eventTime time.Time) []db.InsertMeasurementsParams {
+	var params []db.InsertMeasurementsParams
+	for _, mapping := range metricMapping {
+		sensorGroup, ok := object[mapping.sensorType].(map[string]any)
+		if !ok {
+			continue
+		}
+		raw, ok := sensorGroup[mapping.channel]
+		if !ok {
+			continue
+		}
+		// encoding/json decodes every JSON number as float64; anything else
+		// (nested objects, strings) is not a measurement.
+		value, ok := raw.(float64)
+		if !ok {
+			slog.Warn("mqtt uplink value not numeric",
+				"sensor_type", mapping.sensorType, "channel", mapping.channel, "value", raw)
+			continue
+		}
+		params = append(params, db.InsertMeasurementsParams{
+			Time:       pgtype.Timestamptz{Time: eventTime, Valid: true},
+			StationID:  stationID,
+			MetricType: mapping.metricType,
+			Value:      value,
+		})
+	}
+	return params
 }
 
 // uplinkEvent is the subset of a ChirpStack v4 uplink event (JSON marshaler)
@@ -126,26 +168,7 @@ func (s *Subscriber) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 		eventTime = t
 	}
 
-	var params []db.InsertMeasurementsParams
-	for objectKey, metricType := range metricMapping {
-		raw, ok := event.Object[objectKey]
-		if !ok {
-			continue
-		}
-		// encoding/json decodes every JSON number as float64; anything else
-		// (nested objects, strings) is not a measurement.
-		value, ok := raw.(float64)
-		if !ok {
-			slog.Warn("mqtt uplink value not numeric", "dev_eui", devEUI, "key", objectKey, "value", raw)
-			continue
-		}
-		params = append(params, db.InsertMeasurementsParams{
-			Time:       pgtype.Timestamptz{Time: eventTime, Valid: true},
-			StationID:  station.ID,
-			MetricType: metricType,
-			Value:      value,
-		})
-	}
+	params := extractMeasurements(event.Object, station.ID, eventTime)
 
 	if len(params) == 0 {
 		// Likely a decoder/mapping mismatch — surface the actual keys.
