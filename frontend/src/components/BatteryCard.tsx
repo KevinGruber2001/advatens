@@ -6,6 +6,7 @@ import {
   CardTitle,
 } from "./ui/card"
 import { useMetrics } from "@/hooks/useMetrics"
+import { batteryVoltageToPercent } from "@/lib/battery"
 import { BatteryFull, BatteryLow, BatteryMedium, BatteryWarning } from "lucide-react"
 
 interface BatteryCardProps {
@@ -16,7 +17,8 @@ function BatteryCard({ stationId }: BatteryCardProps) {
   const { data, isPending, isError } = useMetrics(stationId, "battery_level")
 
   const latest = data?.[data.length - 1]
-  const level = latest?.value ?? 0
+  const voltage = latest?.value ?? 0
+  const level = batteryVoltageToPercent(voltage)
 
   const getBatteryIcon = (pct: number) => {
     if (pct > 60) return <BatteryFull className="size-8" />
@@ -73,6 +75,7 @@ function BatteryCard({ stationId }: BatteryCardProps) {
                 : level > 30
                   ? "Battery level is moderate"
                   : "Battery level is low — consider replacing"}
+              {" "}({voltage.toFixed(2)}V)
             </p>
           </div>
         )}
