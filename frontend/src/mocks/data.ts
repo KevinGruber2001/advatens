@@ -55,7 +55,7 @@ function generateMetrics(
     temperature: { base: 18, variance: 8 },
     soil_moisture: { base: 45, variance: 15 },
     ph: { base: 6.5, variance: 0.8 },
-    battery_level: { base: 85, variance: 10 },
+    battery_level: { base: 3.9, variance: 0.2 }, // volts, matches real device payloads
   }
 
   const { base, variance } = ranges[metricType] ?? { base: 50, variance: 10 }
