@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -23,11 +24,15 @@ func (s Server) CreateStation(ctx context.Context, request CreateStationRequestO
 		return nil, err
 	}
 
+	// ChirpStack canonicalizes DevEUIs to lowercase, so the DB copy must match
+	// or the reconciler's and the MQTT subscriber's string comparisons break.
+	deviceID := strings.ToLower(strings.TrimSpace(request.Body.DeviceId))
+
 	// The station is only written to the database here; the reconciler
 	// provisions the ChirpStack device asynchronously.
 	station, err := s.queries.CreateStation(ctx, db.CreateStationParams{
 		Name:      request.Body.Name,
-		DeviceID:  request.Body.DeviceId,
+		DeviceID:  deviceID,
 		OrchardID: orchard.ID,
 	})
 
