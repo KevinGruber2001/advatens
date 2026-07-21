@@ -1,6 +1,16 @@
 # See https://www.chirpstack.io/gateway-bridge/install/config/ for a full
 # configuration example and documentation.
 
+# Topic templates must be prefixed with the region ("eu868") to match what
+# chirpstack's region config subscribes to (see
+# chirpstack/configuration/chirpstack/region_eu868.toml,
+# [regions.gateway.backend.mqtt] topic_prefix). The binary's own defaults
+# have no prefix, which silently breaks gateway discovery.
+[integration.mqtt]
+event_topic_template="eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}"
+state_topic_template="eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}"
+command_topic_template="eu868/gateway/{{ .GatewayID }}/command/#"
+
 [integration.mqtt.auth.generic]
 servers=["tcp://mosquitto:1883"]
 username=""
