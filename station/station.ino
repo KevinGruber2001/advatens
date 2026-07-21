@@ -149,8 +149,19 @@ void uplinkTimerHandler(void *data)
 }
 
 /**
- * Join with exponential backoff, sleeping between attempts. A station
- * powered on before its gateway exists will join by itself later.
+ * Join with exponential backoff between attempts. A station powered on
+ * before its gateway exists will join by itself later.
+ *
+ * Waits with delay()/millis() rather than api.system.sleep.all(): RUI3's
+ * sleep.all() is documented to wake on a LoRaWAN radio TX/RX event and not
+ * resume sleeping afterward (RAKwireless forum, "Limitations on RUI3
+ * Timers"), which made it return almost immediately throughout this loop —
+ * a join attempt is nothing but radio activity (the join TX, the stack's
+ * own RX1/RX2 window handling, the join-status callback). delay() is a
+ * plain busy-wait, unaffected by that, confirmed working by direct test.
+ * Trade-off: the device stays fully awake (no low-power sleep) for the
+ * whole join sequence, including long backoff waits — worth revisiting for
+ * battery life once this is confirmed solid in the field.
  */
 void joinNetwork(void)
 {
@@ -161,10 +172,12 @@ void joinNetwork(void)
         Serial.println("Joining LoRaWAN network...");
         api.lorawan.join();
 
-        // give the join procedure up to 30 s, sleeping in 1 s slices
-        for (int i = 0; i < 30 && api.lorawan.njs.get() == 0; i++) {
-            api.system.sleep.all(1000);
+        // give the join procedure up to 30 s to complete
+        uint32_t wait_start = millis();
+        while (api.lorawan.njs.get() == 0 && (millis() - wait_start) < 30000) {
+            delay(200);
         }
+
         if (api.lorawan.njs.get() == 1) {
             break;
         }
@@ -175,7 +188,10 @@ void joinNetwork(void)
         }
         Serial.printf("Join failed (attempt %lu), retrying in %lus\r\n",
                       (unsigned long)attempts, (unsigned long)(backoff / 1000));
-        api.system.sleep.all(backoff);
+        uint32_t backoff_start = millis();
+        while ((millis() - backoff_start) < backoff) {
+            delay(200);
+        }
         backoff = backoff * 2 > JOIN_BACKOFF_MAX_MS ? JOIN_BACKOFF_MAX_MS
                                                     : backoff * 2;
     }
@@ -250,9 +266,6 @@ void setup()
                           (char *)"SOILCAL", soilcal_handler,
                           RAK_ATCMD_PERM_WRITE | RAK_ATCMD_PERM_READ);
 
-    // BLE service window after boot, then silence for the power budget
-    api.ble.advertise.start(BLE_SERVICE_WINDOW_S);
-
     // Soil sensor
     Wire.begin();
     soilSensor.setup(Wire);
@@ -290,6 +303,13 @@ void setup()
     api.lorawan.registerSendCallback(sendCallback);
 
     joinNetwork();
+
+    // BLE service window, deferred until after joining: api.system.sleep.all()
+    // wakes on BLE advertising events, which was starving the join loop's
+    // sleeps (measured actual sleep time near 0ms regardless of the
+    // requested duration). Silences itself after BLE_SERVICE_WINDOW_S for
+    // the power budget.
+    api.ble.advertise.start(BLE_SERVICE_WINDOW_S);
 
     uint8_t dev_addr[4] = {0};
     api.lorawan.daddr.get(dev_addr, 4);
