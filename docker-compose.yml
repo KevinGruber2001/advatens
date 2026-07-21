@@ -83,6 +83,7 @@ services:
   chirpstack-gateway-bridge:
     image: chirpstack/chirpstack-gateway-bridge:4
     restart: unless-stopped
+    command: -c /etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge.toml
     ports:
       - "1700:1700/udp"
     volumes:
