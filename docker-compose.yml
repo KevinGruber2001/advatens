@@ -3,7 +3,7 @@ services:
   # chirpstack.agrinode.it to the right container by Host header. It is the only
   # service that publishes 80/443; everything else is reached through it.
   traefik:
-    image: traefik:v3.2
+    image: traefik:v3.7
     restart: unless-stopped
     command:
       - --providers.docker=true
@@ -15,9 +15,6 @@ services:
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
-      # Staging CA while we verify DNS/routing: issues untrusted-but-unlimited
-      # test certs. Remove this line to switch to production Let's Encrypt.
-      - --certificatesresolvers.le.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
     ports:
       - "80:80"
       - "443:443"
