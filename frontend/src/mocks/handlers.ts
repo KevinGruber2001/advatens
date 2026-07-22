@@ -82,6 +82,10 @@ export const handlers = [
     const idx = allStations.findIndex((s) => s.id === params.stationId)
     if (idx === -1) return HttpResponse.json({ code: 404, message: "Station not found" }, { status: 404 })
     allStations.splice(idx, 1)
+    for (const orchard of mockOrchards) {
+      const stationIdx = orchard.stations?.findIndex((s) => s.id === params.stationId) ?? -1
+      if (stationIdx !== -1) orchard.stations?.splice(stationIdx, 1)
+    }
     return new HttpResponse(null, { status: 204 })
   }),
 

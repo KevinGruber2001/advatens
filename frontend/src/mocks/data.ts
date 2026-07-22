@@ -54,7 +54,6 @@ function generateMetrics(
   const ranges: Record<string, { base: number; variance: number }> = {
     temperature: { base: 18, variance: 8 },
     soil_moisture: { base: 45, variance: 15 },
-    ph: { base: 6.5, variance: 0.8 },
     battery_level: { base: 3.9, variance: 0.2 }, // volts, matches real device payloads
   }
 
@@ -69,7 +68,7 @@ function generateMetrics(
 }
 
 // Pre-generate metrics for every station + metric type combination
-const metricTypes = ["temperature", "soil_moisture", "ph", "battery_level"] as const
+const metricTypes = ["temperature", "soil_moisture", "battery_level"] as const
 
 export const mockMetrics: Record<string, ReturnType<typeof generateMetrics>> = {}
 

@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { SidebarProvider } from "./components/ui/sidebar.tsx"
 import HomePage from "./components/Homepage.tsx"
 import StationOverview from "./components/StationOverview.tsx"
+import OrchardOverview from "./components/OrchardOverview.tsx"
 
 const IS_MOCK = import.meta.env.VITE_MOCK === "true"
 
@@ -45,6 +46,7 @@ async function boot() {
                 <Routes>
                   <Route path="/" element={<App />}>
                     <Route index element={<HomePage />} />
+                    <Route path="orchard/:orchardId" element={<OrchardOverview />} />
                     <Route path="station/:stationId" element={<StationOverview />} />
                   </Route>
                 </Routes>
