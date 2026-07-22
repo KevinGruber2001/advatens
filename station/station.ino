@@ -46,11 +46,31 @@
 #define BLE_SERVICE_WINDOW_S (240)
 
 // User-flash settings block (api.system.flash user partition, offset 0)
-#define SETTINGS_MAGIC (0x41445601) // "ADV" + layout version 1
+// v2 adds last-reboot diagnostics: existing field devices will not match this
+// magic and fall back to default calibration once — re-run ATC+SOILCAL after
+// flashing this on an already-deployed station.
+#define SETTINGS_MAGIC (0x41445602) // "ADV" + layout version 2
+
+enum RebootReason : uint8_t {
+    REBOOT_REASON_NONE = 0,
+    REBOOT_REASON_NWM_FIX = 1,    // work mode was wrong at boot, forced a fix
+    REBOOT_REASON_JOIN_FAILED = 2,   // JOIN_ATTEMPTS_BEFORE_REBOOT exhausted
+    REBOOT_REASON_UPLINK_FAILED = 3, // MAX_CONSECUTIVE_FAILURES exhausted
+};
+
 struct StationSettings {
     uint32_t magic;
     uint16_t dry_cal; // capacitance read as 0 % moisture
     uint16_t wet_cal; // capacitance read as 100 % moisture
+    // Diagnostics for the reboot that preceded this boot. Set right before
+    // any self-triggered api.system.reboot() call, and reported+cleared once
+    // on the next boot — so the cause survives even if nobody had a serial
+    // monitor open when it happened, but stale info isn't re-reported on a
+    // later, unrelated reset.
+    uint8_t last_reboot_reason; // RebootReason
+    uint8_t last_sensor_ok;     // valid when reason == REBOOT_REASON_UPLINK_FAILED
+    int32_t last_join_status;   // valid when reason == REBOOT_REASON_JOIN_FAILED
+    int32_t last_send_status;   // valid when reason == REBOOT_REASON_UPLINK_FAILED
 };
 
 CayenneLPP lpp(51);
@@ -58,6 +78,12 @@ RAK12035 soilSensor;
 StationSettings settings;
 volatile bool uplink_due = false;
 uint32_t consecutive_failures = 0;
+
+// Latest async callback results, tracked live so they can be captured into
+// settings at the moment we decide to reboot (the callbacks themselves don't
+// know whether this was the failure that tipped us over the limit).
+int32_t g_last_join_status = 0;
+int32_t g_last_send_status = 0;
 
 void loadSettings(void)
 {
@@ -69,12 +95,42 @@ void loadSettings(void)
         settings.magic = SETTINGS_MAGIC;
         settings.dry_cal = 560;
         settings.wet_cal = 356;
+        settings.last_reboot_reason = REBOOT_REASON_NONE;
+        settings.last_sensor_ok = 1;
+        settings.last_join_status = 0;
+        settings.last_send_status = 0;
     }
 }
 
 bool saveSettings(void)
 {
     return api.system.flash.set(0, (uint8_t *)&settings, sizeof(settings));
+}
+
+/**
+ * Print what caused the previous self-triggered reboot, if any, then clear
+ * it so an unrelated later reset doesn't re-report stale info.
+ */
+void reportLastReboot(void)
+{
+    switch (settings.last_reboot_reason) {
+    case REBOOT_REASON_NWM_FIX:
+        Serial.println("Last reboot: fixed LoRaWAN work mode");
+        break;
+    case REBOOT_REASON_JOIN_FAILED:
+        Serial.printf("Last reboot: %d failed joins in a row (last join status %ld)\r\n",
+                      JOIN_ATTEMPTS_BEFORE_REBOOT, (long)settings.last_join_status);
+        break;
+    case REBOOT_REASON_UPLINK_FAILED:
+        Serial.printf("Last reboot: %d failed uplink cycles in a row (sensor_ok=%d, last send status %ld)\r\n",
+                      MAX_CONSECUTIVE_FAILURES, settings.last_sensor_ok,
+                      (long)settings.last_send_status);
+        break;
+    default:
+        return; // nothing to report or clear
+    }
+    settings.last_reboot_reason = REBOOT_REASON_NONE;
+    saveSettings();
 }
 
 void applyCalibration(void)
@@ -130,11 +186,13 @@ void recvCallback(SERVICE_LORA_RECEIVE_T *data)
 
 void joinCallback(int32_t status)
 {
+    g_last_join_status = status;
     Serial.printf("Join status: %d\r\n", status);
 }
 
 void sendCallback(int32_t status)
 {
+    g_last_send_status = status;
     if (status == RAK_LORAMAC_STATUS_OK) {
         Serial.println("Uplink sent");
     } else {
@@ -184,6 +242,9 @@ void joinNetwork(void)
 
         if (++attempts >= JOIN_ATTEMPTS_BEFORE_REBOOT) {
             Serial.println("Too many failed joins, rebooting");
+            settings.last_reboot_reason = REBOOT_REASON_JOIN_FAILED;
+            settings.last_join_status = g_last_join_status;
+            saveSettings();
             api.system.reboot();
         }
         Serial.printf("Join failed (attempt %lu), retrying in %lus\r\n",
@@ -241,6 +302,10 @@ void uplink_routine(void)
         consecutive_failures = 0;
     } else if (++consecutive_failures >= MAX_CONSECUTIVE_FAILURES) {
         Serial.println("Too many consecutive failures, rebooting");
+        settings.last_reboot_reason = REBOOT_REASON_UPLINK_FAILED;
+        settings.last_sensor_ok = sensor_ok ? 1 : 0;
+        settings.last_send_status = g_last_send_status;
+        saveSettings();
         api.system.reboot();
     }
 }
@@ -254,13 +319,17 @@ void setup()
     Serial.printf("RUI3 %s\r\n", api.system.firmwareVersion.get().c_str());
     Serial.println("------------------------------------------------------");
 
+    loadSettings();
+    reportLastReboot();
+
     if (api.lorawan.nwm.get() != 1) {
         Serial.printf("Set Node device work mode %s\r\n",
                       api.lorawan.nwm.set() ? "Success" : "Fail");
+        settings.last_reboot_reason = REBOOT_REASON_NWM_FIX;
+        saveSettings();
         api.system.reboot();
     }
 
-    loadSettings();
     api.system.atMode.add((char *)"SOILCAL",
                           (char *)"Soil sensor calibration: ATC+SOILCAL=<dry>,<wet>",
                           (char *)"SOILCAL", soilcal_handler,
