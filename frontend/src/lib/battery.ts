@@ -1,3 +1,5 @@
+import { BatteryFull, BatteryLow, BatteryMedium, BatteryWarning, type LucideIcon } from "lucide-react"
+
 // Approximate single-cell LiPo discharge curve. Voltage sits in a flat
 // "plateau" for most of the usable charge, so this isn't linear — a plain
 // (voltage - min) / (max - min) scaling would be badly wrong in the middle
@@ -26,4 +28,19 @@ export function batteryVoltageToPercent(voltage: number): number {
     }
   }
   return 0
+}
+
+// Shared so the battery chart header and the sidebar indicator agree on
+// what counts as full/moderate/low, instead of duplicating thresholds.
+export function getBatteryIcon(pct: number): LucideIcon {
+  if (pct > 60) return BatteryFull
+  if (pct > 30) return BatteryMedium
+  if (pct > 15) return BatteryLow
+  return BatteryWarning
+}
+
+export function getBatteryTextColor(pct: number): string {
+  if (pct > 60) return "text-emerald-500"
+  if (pct > 30) return "text-amber-500"
+  return "text-red-500"
 }

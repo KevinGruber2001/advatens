@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { schemas } from "../../generated.api"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useApiClient } from "../hooks/useApiClient"
+import { useOrchards } from "@/hooks/useOrchards"
 import {
   Form,
   FormControl,
@@ -21,17 +22,18 @@ import {
   SheetTitle,
 } from "./ui/sheet"
 
-function CreateStation({ orchardId }: { orchardId: string }) {
+function CreateStation() {
   type FormData = z.infer<typeof schemas.StationCreate>
   const apiClient = useApiClient()
   const queryClient = useQueryClient()
+  const { data: orchards } = useOrchards()
 
   const form = useForm<FormData>({
     resolver: zodResolver(schemas.StationCreate),
     defaultValues: {
       name: "",
       device_id: "",
-      orchard_id: orchardId || "",
+      orchard_id: "",
     },
   })
 
@@ -45,10 +47,7 @@ function CreateStation({ orchardId }: { orchardId: string }) {
   })
 
   const onSubmit = (data: FormData) => {
-    mutation.mutate({
-      ...data,
-      orchard_id: orchardId,
-    })
+    mutation.mutate(data)
   }
 
   return (
@@ -58,6 +57,31 @@ function CreateStation({ orchardId }: { orchardId: string }) {
         <SheetDescription asChild>
           <Form {...form}>
             <form className="space-y-8" onSubmit={form.handleSubmit(onSubmit)}>
+              <FormField
+                control={form.control}
+                name="orchard_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Orchard</FormLabel>
+                    <FormControl>
+                      <select
+                        {...field}
+                        className="file:text-foreground placeholder:text-muted-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] md:text-sm"
+                      >
+                        <option value="" disabled>
+                          Select an orchard
+                        </option>
+                        {orchards?.map((orchard) => (
+                          <option key={orchard.id} value={orchard.id}>
+                            {orchard.name}
+                          </option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="name"

@@ -1,10 +1,83 @@
 import { useState, useMemo } from "react"
-import { useParams } from "react-router"
+import { useParams, useNavigate } from "react-router"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import AppAreaChart from "./AppAreaChart"
-import BatteryCard from "./BatteryCard"
+import { batteryVoltageToPercent } from "@/lib/battery"
 import { useOrchards } from "@/hooks/useOrchards"
-import { Radio, ChevronLeft, ChevronRight } from "lucide-react"
+import { useApiClient } from "@/hooks/useApiClient"
+import { Radio, ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react"
 import { Button } from "./ui/button"
+import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "./ui/alert-dialog"
+import RenameStation from "./RenameStation"
+
+function StationHeaderActions({
+  stationId,
+  stationName,
+  orchardId,
+}: {
+  stationId: string
+  stationName: string
+  orchardId?: string
+}) {
+  const apiClient = useApiClient()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  const mutation = useMutation({
+    mutationFn: () => apiClient.deleteStation(undefined, { params: { stationId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orchard", "list"] })
+      navigate(orchardId ? `/orchard/${orchardId}` : "/")
+    },
+  })
+
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Pencil className="size-4" />
+            Rename
+          </Button>
+        </SheetTrigger>
+        <SheetContent>
+          <RenameStation stationId={stationId} currentName={stationName} />
+        </SheetContent>
+      </Sheet>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Trash2 className="size-4" />
+            Delete
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{stationName}"?</AlertDialogTitle>
+            <AlertDialogDescription>This can't be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => mutation.mutate()}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
 
 type RangeKey = "6h" | "24h" | "48h" | "7d"
 
@@ -80,6 +153,11 @@ function StationOverview() {
             Sensor metrics
           </p>
         </div>
+        <StationHeaderActions
+          stationId={stationId}
+          stationName={station?.name ?? "Station"}
+          orchardId={station?.orchard_id}
+        />
       </div>
 
       {/* Time range controls */}
@@ -126,8 +204,13 @@ function StationOverview() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <AppAreaChart stationId={stationId} metricType="temperature" startTime={startTime} endTime={endTime} />
         <AppAreaChart stationId={stationId} metricType="soil_moisture" startTime={startTime} endTime={endTime} />
-        <AppAreaChart stationId={stationId} metricType="ph" startTime={startTime} endTime={endTime} />
-        <BatteryCard stationId={stationId} />
+        <AppAreaChart
+          stationId={stationId}
+          metricType="battery_level"
+          startTime={startTime}
+          endTime={endTime}
+          valueTransform={batteryVoltageToPercent}
+        />
       </div>
     </div>
   )

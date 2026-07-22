@@ -1,6 +1,8 @@
-import { useParams } from "react-router"
+import { useParams, useNavigate } from "react-router"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useOrchards } from "@/hooks/useOrchards"
 import { useMetrics } from "@/hooks/useMetrics"
+import { useApiClient } from "@/hooks/useApiClient"
 import {
   Card,
   CardContent,
@@ -15,7 +17,73 @@ import {
   type ChartConfig,
 } from "./ui/chart"
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
-import { TreePine } from "lucide-react"
+import { Pencil, Trash2, TreePine } from "lucide-react"
+import { Button } from "./ui/button"
+import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "./ui/alert-dialog"
+import RenameOrchard from "./RenameOrchard"
+
+function OrchardHeaderActions({ orchardId, orchardName }: { orchardId: string; orchardName: string }) {
+  const apiClient = useApiClient()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  const mutation = useMutation({
+    mutationFn: () => apiClient.deleteOrchard(undefined, { params: { orchardId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orchard", "list"] })
+      navigate("/")
+    },
+  })
+
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      <Sheet>
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Pencil className="size-4" />
+            Rename
+          </Button>
+        </SheetTrigger>
+        <SheetContent>
+          <RenameOrchard orchardId={orchardId} currentName={orchardName} />
+        </SheetContent>
+      </Sheet>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Trash2 className="size-4" />
+            Delete
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{orchardName}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This deletes the orchard and all of its stations. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => mutation.mutate()}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
 
 const STATION_COLORS = [
   "var(--chart-1)",
@@ -27,8 +95,7 @@ const STATION_COLORS = [
 
 const metricInfo: Record<string, { label: string; unit: string; description: string }> = {
   temperature: { label: "Temperature", unit: "°C", description: "Ambient temperature across stations" },
-  soil_moisture: { label: "Soil Moisture", unit: "%", description: "Volumetric water content across stations" },
-  ph: { label: "pH Level", unit: "", description: "Soil acidity / alkalinity across stations" },
+  soil_moisture: { label: "Soil Moisture", unit: "%", description: "Relative to each sensor's dry/wet calibration" },
 }
 
 type Station = { id: string; name: string; device_id: string }
@@ -38,7 +105,7 @@ function ComparisonChart({
   metricType,
 }: {
   stations: Station[]
-  metricType: "temperature" | "soil_moisture" | "ph"
+  metricType: "temperature" | "soil_moisture"
 }) {
   const info = metricInfo[metricType]
 
@@ -183,20 +250,20 @@ function OrchardOverview() {
             {stations.length} station{stations.length !== 1 ? "s" : ""} — last 48 hours
           </p>
         </div>
+        <OrchardHeaderActions orchardId={orchard.id} orchardName={orchard.name} />
       </div>
 
       {stations.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No stations in this orchard yet. Add one using the + button in the
-            sidebar.
+            No stations in this orchard yet. Add one using the "Create Station"
+            button in the sidebar.
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
           <ComparisonChart stations={stations} metricType="temperature" />
           <ComparisonChart stations={stations} metricType="soil_moisture" />
-          <ComparisonChart stations={stations} metricType="ph" />
         </div>
       )}
     </div>

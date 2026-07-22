@@ -11,7 +11,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "./ui/chart"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Area, AreaChart, CartesianGrid, ReferenceArea, XAxis, YAxis } from "recharts"
 import { useMetrics } from "@/hooks/useMetrics"
 import type z from "zod"
 import type { schemas } from "generated.api"
@@ -32,13 +32,7 @@ const metricConfig: Record<
     label: "Soil Moisture",
     unit: "%",
     color: "var(--chart-2)",
-    description: "Volumetric water content",
-  },
-  ph: {
-    label: "pH Level",
-    unit: "",
-    color: "var(--chart-3)",
-    description: "Soil acidity / alkalinity",
+    description: "Relative to this sensor's dry/wet calibration",
   },
   battery_level: {
     label: "Battery",
@@ -48,14 +42,24 @@ const metricConfig: Record<
   },
 }
 
+// Soil moisture is calibrated per-sensor (ATC+SOILCAL) so 0% always means
+// "as dry as this sensor's dry point" and 100% "as wet as its wet point" —
+// that makes generic zone thresholds meaningful across different physical
+// sensors, unlike raw uncalibrated volumetric water content.
+const SOIL_MOISTURE_DRY_THRESHOLD = 25
+const SOIL_MOISTURE_WET_THRESHOLD = 70
+
 interface AppAreaChartProps {
   stationId: string
   metricType: MetricType
   startTime?: string
   endTime?: string
+  // Applied to every plotted value and the header's current-value display.
+  // Used e.g. to convert battery_level's raw stored voltage into a percent.
+  valueTransform?: (raw: number) => number
 }
 
-function AppAreaChart({ stationId, metricType, startTime, endTime }: AppAreaChartProps) {
+function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransform }: AppAreaChartProps) {
   const { data, isPending, isError } = useMetrics(stationId, metricType, startTime, endTime)
   const config = metricConfig[metricType] ?? {
     label: metricType,
@@ -71,16 +75,31 @@ function AppAreaChart({ stationId, metricType, startTime, endTime }: AppAreaChar
     },
   } satisfies ChartConfig
 
-  const formatTime = (timestamp: string) => {
-    const d = new Date(timestamp)
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  // Recharts auto-scales the X axis to whatever data points exist unless
+  // given an explicit numeric domain — without this, a sparse-data station
+  // renders "7d" and "48h" identically, since both just fit to the same
+  // handful of points instead of showing the actual selected time window.
+  const chartData = (data ?? []).map((d) => ({
+    ...d,
+    time: new Date(d.timestamp).getTime(),
+    value: valueTransform ? valueTransform(d.value) : d.value,
+  }))
+  const domain: [number, number] | ["auto", "auto"] =
+    startTime && endTime
+      ? [new Date(startTime).getTime(), new Date(endTime).getTime()]
+      : ["auto", "auto"]
+  const isSoilMoistureZoned = metricType === "soil_moisture" && typeof domain[0] === "number"
+
+  const formatTime = (time: number) => {
+    return new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   }
 
   const formatYAxis = (value: number) => {
-    return `${value.toFixed(metricType === "ph" ? 1 : 0)}${config.unit}`
+    return `${value.toFixed(0)}${config.unit}`
   }
 
-  const latest = data?.[data.length - 1]
+  const latestRaw = data?.[data.length - 1]?.value
+  const latestValue = latestRaw === undefined ? undefined : valueTransform ? valueTransform(latestRaw) : latestRaw
 
   return (
     <Card>
@@ -94,7 +113,7 @@ function AppAreaChart({ stationId, metricType, startTime, endTime }: AppAreaChar
           ) : (
             <>
               <span className="text-2xl tabular-nums">
-                {latest?.value.toFixed(1)}
+                {latestValue?.toFixed(1)}
               </span>
               <span className="text-sm font-normal text-muted-foreground">
                 {config.unit}
@@ -108,12 +127,15 @@ function AppAreaChart({ stationId, metricType, startTime, endTime }: AppAreaChar
           <ChartContainer config={chartConfig} className="h-[160px] w-full">
             <AreaChart
               accessibilityLayer
-              data={data ?? []}
+              data={chartData}
               margin={{ left: -4, right: 8, top: 4, bottom: 0 }}
             >
               <CartesianGrid vertical={false} />
               <XAxis
-                dataKey="timestamp"
+                dataKey="time"
+                type="number"
+                scale="time"
+                domain={domain}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
@@ -126,9 +148,33 @@ function AppAreaChart({ stationId, metricType, startTime, endTime }: AppAreaChar
                 tickMargin={4}
                 tickFormatter={formatYAxis}
                 width={48}
-                domain={["auto", "auto"]}
+                domain={metricType === "soil_moisture" ? [0, 100] : ["auto", "auto"]}
                 tickCount={5}
               />
+              {isSoilMoistureZoned && (
+                <ReferenceArea
+                  x1={domain[0]}
+                  x2={domain[1]}
+                  y1={0}
+                  y2={SOIL_MOISTURE_DRY_THRESHOLD}
+                  fill="var(--destructive)"
+                  fillOpacity={0.08}
+                  stroke="none"
+                  ifOverflow="visible"
+                />
+              )}
+              {isSoilMoistureZoned && (
+                <ReferenceArea
+                  x1={domain[0]}
+                  x2={domain[1]}
+                  y1={SOIL_MOISTURE_WET_THRESHOLD}
+                  y2={100}
+                  fill="#3b82f6"
+                  fillOpacity={0.08}
+                  stroke="none"
+                  ifOverflow="visible"
+                />
+              )}
               <ChartTooltip
                 cursor={false}
                 content={

@@ -1,4 +1,32 @@
 services:
+  # Traefik reverse proxy: terminates TLS and routes agrinode.it / api.agrinode.it /
+  # chirpstack.agrinode.it to the right container by Host header. It is the only
+  # service that publishes 80/443; everything else is reached through it.
+  traefik:
+    image: traefik:v3.2
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      # Staging CA while we verify DNS/routing: issues untrusted-but-unlimited
+      # test certs. Remove this line to switch to production Let's Encrypt.
+      - --certificatesresolvers.le.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - advatens-network
+
   # TimescaleDB / PostgreSQL (shared by Advatens and ChirpStack)
   postgres:
     image: timescale/timescaledb:2.28.3-pg15
@@ -53,11 +81,15 @@ services:
     image: chirpstack/chirpstack:4
     restart: unless-stopped
     command: -c /etc/chirpstack
-    ports:
-      # Exposed publicly by choice (dashboard convenience). Make sure
-      # CHIRPSTACK_ADMIN_PASSWORD is a strong, non-default value — this port
-      # serves the admin login and it will get scanned.
-      - "8080:8080"
+    # Reached through Traefik at chirpstack.agrinode.it (see labels below), not
+    # published directly. Make sure CHIRPSTACK_ADMIN_PASSWORD is a strong,
+    # non-default value — this is a login page and it will get scanned.
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.chirpstack.rule=Host(`chirpstack.agrinode.it`)
+      - traefik.http.routers.chirpstack.entrypoints=websecure
+      - traefik.http.routers.chirpstack.tls.certresolver=le
+      - traefik.http.services.chirpstack.loadbalancer.server.port=8080
     environment:
       CHIRPSTACK_API_SECRET: ${CHIRPSTACK_API_SECRET:-local-dev-secret-change-in-prod}
       POSTGRESQL_HOST: postgres
@@ -126,8 +158,14 @@ services:
       context: ./server
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "8888:8888"
+    # Reached through Traefik at api.agrinode.it (see labels below), not
+    # published directly.
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.server.rule=Host(`api.agrinode.it`)
+      - traefik.http.routers.server.entrypoints=websecure
+      - traefik.http.routers.server.tls.certresolver=le
+      - traefik.http.services.server.loadbalancer.server.port=8888
     env_file: .env
     environment:
       # Docker-internal hostnames (override .env local values)
@@ -154,8 +192,14 @@ services:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8888}
         VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
     restart: unless-stopped
-    ports:
-      - "3000:80"
+    # Reached through Traefik at agrinode.it (see labels below), not published
+    # directly.
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.rule=Host(`agrinode.it`) || Host(`www.agrinode.it`)
+      - traefik.http.routers.frontend.entrypoints=websecure
+      - traefik.http.routers.frontend.tls.certresolver=le
+      - traefik.http.services.frontend.loadbalancer.server.port=80
     depends_on:
       - server
     networks:
@@ -167,6 +211,7 @@ volumes:
   mosquitto_data:
   mosquitto_log:
   chirpstack_lorawan_frames:
+  traefik_letsencrypt:
 
 networks:
   advatens-network:

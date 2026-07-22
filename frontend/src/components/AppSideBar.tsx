@@ -2,12 +2,11 @@ import { Link, useLocation } from "react-router"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
@@ -16,16 +15,27 @@ import {
   SidebarMenuSubItem,
   SidebarSeparator,
 } from "./ui/sidebar"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "./ui/collapsible"
-import { ChevronRight, Leaf, Plus, Radio, TreePine } from "lucide-react"
+import { Leaf, Plus, Radio, TreePine } from "lucide-react"
 import { useOrchards } from "@/hooks/useOrchards"
+import { useLatestBatteryPercent } from "@/hooks/useLatestBattery"
+import { getBatteryIcon, getBatteryTextColor } from "@/lib/battery"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
+import { Button } from "./ui/button"
 import CreateStation from "./CreateStation"
 import CreateOrchard from "./CreateOrchard"
+
+function StationBatteryIndicator({ stationId }: { stationId: string }) {
+  const { percent, isPending, isError } = useLatestBatteryPercent(stationId)
+  if (isPending || isError || percent === undefined) return null
+
+  const Icon = getBatteryIcon(percent)
+  return (
+    <Icon
+      className={`size-3.5 shrink-0 ml-auto ${getBatteryTextColor(percent)}`}
+      aria-label={`Battery ${percent.toFixed(0)}%`}
+    />
+  )
+}
 
 function AppSideBar() {
   const { data, isLoading, isError } = useOrchards()
@@ -58,17 +68,6 @@ function AppSideBar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Orchards</SidebarGroupLabel>
-          <Sheet>
-            <SidebarGroupAction asChild>
-              <SheetTrigger>
-                <Plus className="size-4" />
-                <span className="sr-only">Add Orchard</span>
-              </SheetTrigger>
-            </SidebarGroupAction>
-            <SheetContent>
-              <CreateOrchard />
-            </SheetContent>
-          </Sheet>
           <SidebarMenu>
             {isLoading && (
               <>
@@ -83,60 +82,68 @@ function AppSideBar() {
             )}
 
             {data?.map((orchard) => {
+              const isOrchardActive = location.pathname === `/orchard/${orchard.id}`
               return (
-              <Collapsible key={orchard.id} defaultOpen asChild className="group/collapsible">
-                <SidebarMenuItem>
-                  <SidebarMenuButton tooltip={orchard.name} className="pointer-events-none hover:bg-transparent">
-                    <TreePine className="size-4" />
-                    <span>{orchard.name}</span>
+                <SidebarMenuItem key={orchard.id}>
+                  <SidebarMenuButton asChild tooltip={orchard.name} isActive={isOrchardActive}>
+                    <Link to={`/orchard/${orchard.id}`}>
+                      <TreePine className="size-4" />
+                      <span>{orchard.name}</span>
+                    </Link>
                   </SidebarMenuButton>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuAction className="data-[state=open]:rotate-90">
-                      <ChevronRight className="size-4" />
-                      <span className="sr-only">Toggle</span>
-                    </SidebarMenuAction>
-                  </CollapsibleTrigger>
-                  <Sheet>
-                    <SidebarMenuAction asChild className="right-6">
-                      <SheetTrigger>
-                        <Plus className="size-4" />
-                        <span className="sr-only">Add Station</span>
-                      </SheetTrigger>
-                    </SidebarMenuAction>
-                    <SheetContent>
-                      <CreateStation orchardId={orchard.id} />
-                    </SheetContent>
-                  </Sheet>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {orchard.stations?.map((station) => {
-                        const isActive =
-                          location.pathname === `/station/${station.id}`
-                        return (
-                          <SidebarMenuSubItem key={station.id}>
-                            <SidebarMenuSubButton asChild isActive={isActive}>
-                              <Link to={`/station/${station.id}`}>
-                                <Radio className="size-3.5" />
-                                <span>{station.name}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        )
-                      })}
-                      {(!orchard.stations || orchard.stations.length === 0) && (
-                        <li className="px-2 py-1 text-xs text-muted-foreground">
-                          No stations yet
-                        </li>
-                      )}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
+                  <SidebarMenuSub>
+                    {orchard.stations?.map((station) => {
+                      const isActive =
+                        location.pathname === `/station/${station.id}`
+                      return (
+                        <SidebarMenuSubItem key={station.id}>
+                          <SidebarMenuSubButton asChild isActive={isActive}>
+                            <Link to={`/station/${station.id}`}>
+                              <Radio className="size-3.5 shrink-0" />
+                              <span className="truncate">{station.name}</span>
+                              <StationBatteryIndicator stationId={station.id} />
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )
+                    })}
+                    {(!orchard.stations || orchard.stations.length === 0) && (
+                      <li className="px-2 py-1 text-xs text-muted-foreground">
+                        No stations yet
+                      </li>
+                    )}
+                  </SidebarMenuSub>
                 </SidebarMenuItem>
-              </Collapsible>
               )
             })}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full justify-start gap-2">
+              <Plus className="size-4" />
+              Create Orchard
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <CreateOrchard />
+          </SheetContent>
+        </Sheet>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full justify-start gap-2">
+              <Plus className="size-4" />
+              Create Station
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <CreateStation />
+          </SheetContent>
+        </Sheet>
+      </SidebarFooter>
     </Sidebar>
   )
 }
