@@ -50,17 +50,25 @@ export const handlers = [
 
   // --- Stations ---
   http.post(`${BASE}/stations`, async ({ request }) => {
-    const body = (await request.json()) as { orchard_id: string; name: string; device_id: string }
+    const body = (await request.json()) as { orchard_id: string; name: string }
+    const deviceId = crypto.randomUUID().replace(/-/g, "").slice(0, 16)
     const newStation = {
       id: crypto.randomUUID(),
       orchard_id: body.orchard_id,
       name: body.name,
-      device_id: body.device_id,
+      device_id: deviceId,
     }
     allStations.push(newStation)
     const orchard = mockOrchards.find((o) => o.id === body.orchard_id)
     orchard?.stations?.push(newStation)
-    return HttpResponse.json(newStation, { status: 201 })
+    return HttpResponse.json(
+      {
+        ...newStation,
+        app_eui: "0000000000000000",
+        app_key: crypto.randomUUID().replace(/-/g, ""), // 32 hex chars = 16 bytes
+      },
+      { status: 201 }
+    )
   }),
 
   http.get(`${BASE}/stations/:stationId`, ({ params }) => {

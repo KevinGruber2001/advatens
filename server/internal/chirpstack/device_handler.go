@@ -36,6 +36,23 @@ func (c *Client) CreateDevice(ctx context.Context, req CreateDeviceRequest) (*ap
 	return device, nil
 }
 
+// SetDeviceKeys sets the OTAA AppKey for a LoRaWAN 1.0.x device. ChirpStack's
+// DeviceKeys message uses the NwkKey field for the 1.0.x AppKey (AppKey is
+// only used for 1.1 devices) — our device profile is pinned to 1.0.3.
+func (c *Client) SetDeviceKeys(ctx context.Context, devEUI, appKey string) error {
+	ctx = c.withAuth(ctx)
+
+	req := &api.CreateDeviceKeysRequest{
+		DeviceKeys: &api.DeviceKeys{
+			DevEui: devEUI,
+			NwkKey: appKey,
+		},
+	}
+
+	_, err := c.deviceClient.CreateKeys(ctx, req)
+	return err
+}
+
 func (c *Client) GetDevice(ctx context.Context, devEUI string) (*api.Device, error) {
 	ctx = c.withAuth(ctx)
 

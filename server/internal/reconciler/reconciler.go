@@ -189,7 +189,19 @@ func (r *Reconciler) createDevice(ctx context.Context, station db.Station) error
 		Name:        station.Name,
 		Description: "Managed by advatens server",
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Legacy/manually-provisioned stations have no generated key — leave
+	// their keys to be set by hand in the ChirpStack UI, as before.
+	if station.AppKey == nil {
+		return nil
+	}
+	if err := r.cs.SetDeviceKeys(ctx, station.DeviceID, *station.AppKey); err != nil {
+		return fmt.Errorf("set device keys: %w", err)
+	}
+	return nil
 }
 
 func (r *Reconciler) updateDevice(ctx context.Context, station db.Station) error {

@@ -47,10 +47,17 @@ const OrchardUpdate = z
   .strict()
   .passthrough();
 const StationCreate = z
+  .object({ orchard_id: z.string().uuid(), name: z.string() })
+  .strict()
+  .passthrough();
+const StationCredentials = z
   .object({
+    id: z.string().uuid(),
     orchard_id: z.string().uuid(),
     name: z.string(),
     device_id: z.string(),
+    app_eui: z.string(),
+    app_key: z.string(),
   })
   .strict()
   .passthrough();
@@ -82,6 +89,7 @@ export const schemas = {
   Error,
   OrchardUpdate,
   StationCreate,
+  StationCredentials,
   StationUpdate,
   Metric,
 };
@@ -302,7 +310,7 @@ const endpoints = makeApi([
         schema: StationCreate,
       },
     ],
-    response: Station,
+    response: StationCredentials,
     errors: [
       {
         status: 400,

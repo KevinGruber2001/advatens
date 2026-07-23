@@ -20,25 +20,28 @@ type MetricType = z.infer<typeof schemas.Metric>["metric_type"]
 
 const metricConfig: Record<
   string,
-  { label: string; unit: string; color: string; description: string }
+  { label: string; unit: string; color: string; description: string; fallbackDomain: [number, number] }
 > = {
   temperature: {
     label: "Temperature",
     unit: "°C",
     color: "var(--chart-1)",
     description: "Ambient temperature readings",
+    fallbackDomain: [0, 40],
   },
   soil_moisture: {
     label: "Soil Moisture",
     unit: "%",
     color: "var(--chart-2)",
     description: "Relative to this sensor's dry/wet calibration",
+    fallbackDomain: [0, 100],
   },
   battery_level: {
     label: "Battery",
     unit: "%",
     color: "var(--chart-4)",
     description: "Device battery charge",
+    fallbackDomain: [0, 100],
   },
 }
 
@@ -66,6 +69,7 @@ function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransfor
     unit: "",
     color: "var(--chart-1)",
     description: "",
+    fallbackDomain: [0, 100] as [number, number],
   }
 
   const chartConfig = {
@@ -79,19 +83,67 @@ function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransfor
   // given an explicit numeric domain — without this, a sparse-data station
   // renders "7d" and "48h" identically, since both just fit to the same
   // handful of points instead of showing the actual selected time window.
-  const chartData = (data ?? []).map((d) => ({
-    ...d,
-    time: new Date(d.timestamp).getTime(),
-    value: valueTransform ? valueTransform(d.value) : d.value,
-  }))
+  const hasData = (data ?? []).length > 0
   const domain: [number, number] | ["auto", "auto"] =
     startTime && endTime
       ? [new Date(startTime).getTime(), new Date(endTime).getTime()]
       : ["auto", "auto"]
+  // With zero real readings, feed the chart two invisible boundary points
+  // (start/end of the requested range, no value) rather than an empty array
+  // — Recharts needs *some* data to lay out axes at all, and this keeps the
+  // X axis spanning the full requested window instead of collapsing.
+  const chartData = hasData
+    ? (data ?? []).map((d) => ({
+        ...d,
+        time: new Date(d.timestamp).getTime(),
+        value: valueTransform ? valueTransform(d.value) : d.value,
+      }))
+    : typeof domain[0] === "number"
+      ? [{ time: domain[0] }, { time: domain[1] }]
+      : []
+  const yDomain: [number, number] | ["auto", "auto"] =
+    metricType === "soil_moisture" ? [0, 100] : hasData ? ["auto", "auto"] : config.fallbackDomain
   const isSoilMoistureZoned = metricType === "soil_moisture" && typeof domain[0] === "number"
 
+  const HOUR_MS = 60 * 60 * 1000
+  const DAY_MS = 24 * HOUR_MS
+  // Explicit, human-aligned ticks rather than Recharts' default "nice"
+  // algorithm: hourly for 6h, every 4h for 24h, every 8h for 48h, daily for
+  // 7d — all aligned to real clock/day boundaries (e.g. 4:00, not 4:15) by
+  // walking forward from local midnight of the range's start day.
+  let tickStepMs = HOUR_MS
+  let isDailyTicks = false
+  const [rawStart, rawEnd] = domain
+  const rangeMs = typeof rawStart === "number" && typeof rawEnd === "number" ? rawEnd - rawStart : undefined
+  if (rangeMs !== undefined) {
+    if (rangeMs <= 6 * HOUR_MS + HOUR_MS) tickStepMs = HOUR_MS
+    else if (rangeMs <= 24 * HOUR_MS + HOUR_MS) tickStepMs = 4 * HOUR_MS
+    else if (rangeMs <= 48 * HOUR_MS + HOUR_MS) tickStepMs = 8 * HOUR_MS
+    else {
+      tickStepMs = DAY_MS
+      isDailyTicks = true
+    }
+  }
+
+  const ticks: number[] | undefined =
+    typeof rawStart === "number" && typeof rawEnd === "number"
+      ? (() => {
+          const dayStart = new Date(rawStart)
+          dayStart.setHours(0, 0, 0, 0)
+          const result: number[] = []
+          for (let t = dayStart.getTime(); t <= rawEnd; t += tickStepMs) {
+            if (t >= rawStart) result.push(t)
+          }
+          return result
+        })()
+      : undefined
+
   const formatTime = (time: number) => {
-    return new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    const d = new Date(time)
+    if (isDailyTicks) {
+      return d.toLocaleDateString([], { weekday: "short" })
+    }
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   }
 
   const formatYAxis = (value: number) => {
@@ -122,7 +174,12 @@ function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransfor
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-2 pt-0 pb-4">
+      <CardContent className="relative px-2 pt-0 pb-4">
+        {!isPending && !isError && !hasData && (
+          <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">
+            No data in this range
+          </span>
+        )}
         {!isPending && !isError && (
           <ChartContainer config={chartConfig} className="h-[160px] w-full">
             <AreaChart
@@ -140,7 +197,7 @@ function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransfor
                 axisLine={false}
                 tickMargin={8}
                 tickFormatter={formatTime}
-                minTickGap={40}
+                ticks={ticks}
               />
               <YAxis
                 tickLine={false}
@@ -148,7 +205,7 @@ function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransfor
                 tickMargin={4}
                 tickFormatter={formatYAxis}
                 width={48}
-                domain={metricType === "soil_moisture" ? [0, 100] : ["auto", "auto"]}
+                domain={yDomain}
                 tickCount={5}
               />
               {isSoilMoistureZoned && (
