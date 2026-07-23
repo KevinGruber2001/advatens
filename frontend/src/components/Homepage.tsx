@@ -15,7 +15,7 @@ function HomePage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-4">
       <div className="bg-primary-foreground rounded-lg p-6 lg:col-span-2 xl:col-span-1 2xl:col-span-2">
-        <h2 className="text-2xl font-bold mb-4">Welcome to Advatens</h2>
+        <h2 className="text-2xl font-bold mb-4">Welcome to AgriNode</h2>
         <p className="text-muted-foreground mb-4">
           Select a station from the sidebar to view metrics
         </p>

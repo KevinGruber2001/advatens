@@ -108,13 +108,31 @@ type Station struct {
 
 // StationCreate defines model for StationCreate.
 type StationCreate struct {
-	// DeviceId ChirpStack device ID
-	DeviceId string `json:"device_id"`
-
 	// Name Name of the station
 	Name string `json:"name"`
 
 	// OrchardId ID of the orchard to add the station to
+	OrchardId openapi_types.UUID `json:"orchard_id"`
+}
+
+// StationCredentials defines model for StationCredentials.
+type StationCredentials struct {
+	// AppEui LoRaWAN AppEUI/JoinEUI — fixed at all zeros for this private network
+	AppEui string `json:"app_eui"`
+
+	// AppKey Generated LoRaWAN AppKey for OTAA. Shown only in this create response — provision the device with it now.
+	AppKey string `json:"app_key"`
+
+	// DeviceId Generated LoRaWAN DevEUI, also used as the ChirpStack device ID
+	DeviceId string `json:"device_id"`
+
+	// Id Unique identifier for the station
+	Id openapi_types.UUID `json:"id"`
+
+	// Name Name of the station
+	Name string `json:"name"`
+
+	// OrchardId ID of the orchard this station belongs to
 	OrchardId openapi_types.UUID `json:"orchard_id"`
 }
 
@@ -779,7 +797,7 @@ type CreateStationResponseObject interface {
 	VisitCreateStationResponse(w http.ResponseWriter) error
 }
 
-type CreateStation201JSONResponse Station
+type CreateStation201JSONResponse StationCredentials
 
 func (response CreateStation201JSONResponse) VisitCreateStationResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")

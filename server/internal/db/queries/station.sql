@@ -1,6 +1,6 @@
 -- name: CreateStation :one
-INSERT INTO station (name, device_id, orchard_id)
-VALUES ($1, $2, $3)
+INSERT INTO station (name, device_id, orchard_id, app_key)
+VALUES ($1, $2, $3, $4)
     RETURNING *;
 
 -- name: GetStationById :one

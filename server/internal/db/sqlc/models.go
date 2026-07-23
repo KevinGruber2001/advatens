@@ -131,4 +131,5 @@ type Station struct {
 	DeviceID   string            `json:"device_id"`
 	CreatedAt  pgtype.Timestamp  `json:"created_at"`
 	SyncStatus StationSyncStatus `json:"sync_status"`
+	AppKey     *string           `json:"app_key"`
 }
