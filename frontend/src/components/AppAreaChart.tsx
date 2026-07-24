@@ -92,12 +92,31 @@ function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransfor
   // (start/end of the requested range, no value) rather than an empty array
   // — Recharts needs *some* data to lay out axes at all, and this keeps the
   // X axis spanning the full requested window instead of collapsing.
+  const HOUR_MS = 60 * 60 * 1000
   const chartData = hasData
-    ? (data ?? []).map((d) => ({
-        ...d,
-        time: new Date(d.timestamp).getTime(),
-        value: valueTransform ? valueTransform(d.value) : d.value,
-      }))
+    ? (() => {
+        const points = (data ?? []).map((d) => ({
+          ...d,
+          time: new Date(d.timestamp).getTime(),
+          value: valueTransform ? valueTransform(d.value) : d.value,
+        }))
+        // Server metrics are hour-bucketed, so the latest bucket timestamp is
+        // aligned to hh:00 even when it includes readings up to "now". Extend
+        // the final point to range-end so the chart visually covers the whole
+        // selected window while keeping hour-aligned ticks.
+        if (typeof domain[1] === "number" && points.length > 0) {
+          const lastPoint = points[points.length - 1]
+          const tailMs = domain[1] - lastPoint.time
+          if (tailMs > 0 && tailMs < HOUR_MS) {
+            points.push({
+              ...lastPoint,
+              time: domain[1],
+              timestamp: new Date(domain[1]).toISOString(),
+            })
+          }
+        }
+        return points
+      })()
     : typeof domain[0] === "number"
       ? [{ time: domain[0] }, { time: domain[1] }]
       : []
@@ -105,7 +124,6 @@ function AppAreaChart({ stationId, metricType, startTime, endTime, valueTransfor
     metricType === "soil_moisture" ? [0, 100] : hasData ? ["auto", "auto"] : config.fallbackDomain
   const isSoilMoistureZoned = metricType === "soil_moisture" && typeof domain[0] === "number"
 
-  const HOUR_MS = 60 * 60 * 1000
   const DAY_MS = 24 * HOUR_MS
   // Explicit, human-aligned ticks rather than Recharts' default "nice"
   // algorithm: hourly for 6h, every 4h for 24h, every 8h for 48h, daily for
