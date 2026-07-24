@@ -10,7 +10,7 @@
  *
  * LoRaWAN credentials are NOT set by this firmware. Provision them once per
  * device over serial (AT+DEVEUI / AT+APPEUI / AT+APPKEY); RUI3 persists them
- * in flash. Per-sensor calibration is set with ATC+SOILCAL=<dry>,<wet> and
+ * in flash. Per-sensor calibration is set with ATC+SOILCAL=<dry>:<wet> and
  * persisted in user flash.
  */
 
@@ -141,7 +141,7 @@ void applyCalibration(void)
 
 /**
  * ATC+SOILCAL=?           -> report current calibration
- * ATC+SOILCAL=<dry>,<wet> -> set and persist calibration
+ * ATC+SOILCAL=<dry>:<wet> -> set and persist calibration
  */
 int soilcal_handler(SERIAL_PORT port, char *cmd, stParam *param)
 {
@@ -169,7 +169,46 @@ int soilcal_handler(SERIAL_PORT port, char *cmd, stParam *param)
     if (!saveSettings()) {
         return AT_ERROR;
     }
+    // The sensor is normally powered off outside the brief uplink window —
+    // writing calibration over I2C to an unpowered sensor can hang the bus
+    // waiting for an ACK that never comes, freezing serial command handling
+    // until the next hard reset. Power it up for the write, then back down.
+    soilSensor.sensor_on();
+    delay(SENSOR_STABILIZE_MS);
     applyCalibration();
+    soilSensor.sensor_sleep();
+    return AT_OK;
+}
+
+/**
+ * ATC+SOILRAW=? -> power the sensor, take one reading now, print the raw
+ * capacitance immediately. For calibration: run this with the sensor in a
+ * fully dry reference, note the value, run it again fully wet, note that
+ * value, then ATC+SOILCAL=<dry>:<wet> with the two numbers. Doesn't touch
+ * calibration itself, so it's safe to run as many times as needed.
+ */
+int soilraw_handler(SERIAL_PORT port, char *cmd, stParam *param)
+{
+    if (param->argc != 1 || strcmp(param->argv[0], "?")) {
+        return AT_PARAM_ERROR;
+    }
+
+    soilSensor.sensor_on();
+    delay(SENSOR_STABILIZE_MS);
+    applyCalibration(); // sensor settings do not survive power-off
+
+    uint16_t capacitance = 0;
+    uint8_t moisture = 0;
+    bool cap_ok = soilSensor.get_sensor_capacitance(&capacitance);
+    bool moist_ok = soilSensor.get_sensor_moisture(&moisture);
+
+    soilSensor.sensor_sleep();
+
+    if (!cap_ok) {
+        return AT_ERROR;
+    }
+    Serial.printf("%s=%u (moisture=%u%% ok=%d against current cal %u,%u)\r\n",
+                  cmd, capacitance, moisture, moist_ok, settings.dry_cal, settings.wet_cal);
     return AT_OK;
 }
 
@@ -331,9 +370,13 @@ void setup()
     }
 
     api.system.atMode.add((char *)"SOILCAL",
-                          (char *)"Soil sensor calibration: ATC+SOILCAL=<dry>,<wet>",
+                          (char *)"Soil sensor calibration: ATC+SOILCAL=<dry>:<wet>",
                           (char *)"SOILCAL", soilcal_handler,
                           RAK_ATCMD_PERM_WRITE | RAK_ATCMD_PERM_READ);
+    api.system.atMode.add((char *)"SOILRAW",
+                          (char *)"Read live raw soil capacitance now: ATC+SOILRAW=?",
+                          (char *)"SOILRAW", soilraw_handler,
+                          RAK_ATCMD_PERM_READ);
 
     // Soil sensor
     Wire.begin();
